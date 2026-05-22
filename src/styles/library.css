@@ -1,0 +1,73 @@
+/* ─── Learned Page / Library Tabs ─── */
+.lib-tabs {
+  display: flex;
+  background: var(--border);
+  border-radius: 10px;
+  padding: 2px;
+  gap: 0;
+  margin-bottom: 16px;
+}
+
+.lib-tab {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-2);
+  font-family: 'Inter', sans-serif;
+  border: none;
+  background: none;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.lib-tab.on {
+  background: var(--white);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.learned-cta {
+  background: var(--green-bg);
+  border: 0.5px solid var(--green-border);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.learned-cta-info .learned-cta-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.learned-cta-info .learned-cta-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+
+.learned-practice-btn {
+  background: var(--green);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.learned-practice-btn:hover {
+  opacity: 0.9;
+}
