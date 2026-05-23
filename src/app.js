@@ -567,20 +567,6 @@ function renderStats() {
   const topicAgg = aggregateAttempts(DB.attempts, a => a.topic);
   const dirAgg = aggregateAttempts(DB.attempts, a => a.direction);
   const patternAgg = aggregateAttempts(DB.patternAttempts, a => a.id);
-  const localBackup = getLocalBackupStatus();
-  const localBackupSaved = localBackup.lastSavedAt
-    ? new Date(localBackup.lastSavedAt).toLocaleString('en-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : null;
-  const localBackupText = !localBackup.supported
-    ? 'Not supported in this browser'
-    : localBackup.error
-      ? localBackup.error
-      : localBackup.enabled
-        ? `Connected${localBackupSaved ? ` · saved ${localBackupSaved}` : ''}`
-        : 'Not connected';
-  const localBackupButton = localBackup.enabled
-    ? `<button onclick="writeBackupNow()" style="flex:1;background:var(--white);border:1px solid var(--green-border);border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--green);font-family:'Inter',sans-serif;transition:all 0.15s" type="button">💾 Update Local File</button>`
-    : `<button onclick="enableFileBackup()" ${localBackup.supported ? '' : 'disabled'} style="flex:1;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:${localBackup.supported ? 'pointer' : 'not-allowed'};color:${localBackup.supported ? 'var(--text-2)' : 'var(--text-3)'};font-family:'Inter',sans-serif;transition:all 0.15s" type="button">💾 Connect Local File</button>`;
   const weakSentences = Object.entries(sentenceAgg)
     .map(([id, s]) => ({ id, ...s, acc: pct(s.got, s.total) }))
     .filter(s => s.total >= 1 && (s.again > 0 || s.acc < 70))
@@ -665,15 +651,6 @@ ${byLevel.map(l => `<div class="prog-row">
 </div>`).join('')}
 
 	<div class="stats-sec-hdr">💾 Data</div>
-	<div class="backup-card">
-	  <div>
-	    <div class="backup-title">Local file backup</div>
-	    <div class="backup-sub">${esc(localBackupText)}</div>
-	  </div>
-	  <div class="backup-actions">
-	    ${localBackupButton}
-	  </div>
-	</div>
 	<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
 	  <button onclick="exportData()" style="flex:1;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;font-weight:500;cursor:pointer;color:var(--text-2);font-family:'Inter',sans-serif;transition:all 0.15s">📤 Export Backup</button>
   <button onclick="importData()" style="flex:1;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;font-weight:500;cursor:pointer;color:var(--text-2);font-family:'Inter',sans-serif;transition:all 0.15s">📥 Import Backup</button>
@@ -1510,24 +1487,6 @@ function showAppToast(message, ok = true) {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
-}
-
-function enableFileBackup() {
-  enableLocalFileBackup()
-    .then(() => {
-      showAppToast('✅ Local backup file connected.');
-      render();
-    })
-    .catch(error => showAppToast(error && error.message ? error.message : 'Could not connect local backup file.', false));
-}
-
-function writeBackupNow() {
-  writeLocalFileBackupNow()
-    .then(() => {
-      showAppToast('✅ Local backup file updated.');
-      render();
-    })
-    .catch(error => showAppToast(error && error.message ? error.message : 'Could not update local backup file.', false));
 }
 
 function exportData() {

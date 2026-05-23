@@ -22,6 +22,19 @@ if (!/href="src\/styles\.css(?:\?[^"]*)?"/.test(html)) errors.push('DEDaily.html
 if (!/rel="icon" href="src\/assets\/logo\.svg" type="image\/svg\+xml"/.test(html)) errors.push('DEDaily.html missing SVG favicon');
 if (!fs.existsSync(path.join(root, 'src/assets/logo.svg'))) errors.push('src/assets/logo.svg missing');
 
+try {
+  const vercelConfig = JSON.parse(read('vercel.json'));
+  const rewrites = Array.isArray(vercelConfig.rewrites) ? vercelConfig.rewrites : [];
+  const hasRootRewrite = rewrites.some(rewrite => (
+    rewrite &&
+    rewrite.source === '/' &&
+    rewrite.destination === '/DEDaily.html'
+  ));
+  if (!hasRootRewrite) errors.push('vercel.json must rewrite / to /DEDaily.html');
+} catch (error) {
+  errors.push(`vercel.json invalid or missing: ${error.message}`);
+}
+
 const source = [
   read('src/content.js'),
   read('src/learning.js'),

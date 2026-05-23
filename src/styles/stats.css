@@ -287,33 +287,3 @@
   color: var(--text-3);
   font-size: 13px;
 }
-
-.backup-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 10px;
-  box-shadow: var(--shadow-sm);
-}
-
-.backup-title {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.backup-sub {
-  color: var(--text-3);
-  font-size: 12px;
-  margin-top: 3px;
-}
-
-.backup-actions {
-  display: flex;
-  min-width: 180px;
-}

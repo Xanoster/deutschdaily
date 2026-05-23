@@ -5,9 +5,6 @@ const SKEY = 'dd_v4';
 const SKEY_OLD = 'dd_clean_v1';
 const SKEY_BACKUP = 'dd_v4_backup';
 const SKEY_RECOVERY = 'dd_v4_recovery';
-const FILE_BACKUP_DB = 'deutschdaily_file_backup';
-const FILE_BACKUP_STORE = 'handles';
-const FILE_BACKUP_HANDLE_KEY = 'progress-backup-handle';
 const DB_VERSION = 5;
 const FIRST_REVIEW_DAYS = 3;
 const DEFAULT_SETTINGS = {
@@ -35,15 +32,6 @@ let DB = {
   attempts: [],
   patternAttempts: [],
   settings: { ...DEFAULT_SETTINGS },
-};
-let _fileBackupHandle = null;
-let _fileBackupInitPromise = null;
-let _fileBackupWriteTimer = null;
-let _fileBackupState = {
-  enabled: false,
-  supported: false,
-  lastSavedAt: null,
-  error: null,
 };
 
 function validSentenceIdSet() { return new Set(SENTENCES.map(s => s.id)); }
@@ -317,159 +305,11 @@ function preserveCorruptStorage(candidates) {
   }
 }
 
-function fileBackupSupported() {
-  return Boolean(window.showSaveFilePicker && window.indexedDB);
-}
-
-function openFileBackupDb() {
-  return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
-      reject(new Error('IndexedDB is not available in this browser.'));
-      return;
-    }
-    const request = window.indexedDB.open(FILE_BACKUP_DB, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(FILE_BACKUP_STORE)) db.createObjectStore(FILE_BACKUP_STORE);
-    };
-    request.onerror = () => reject(request.error || new Error('Could not open local backup database.'));
-    request.onsuccess = () => resolve(request.result);
-  });
-}
-
-async function readFileBackupHandle() {
-  const db = await openFileBackupDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(FILE_BACKUP_STORE, 'readonly');
-    const request = tx.objectStore(FILE_BACKUP_STORE).get(FILE_BACKUP_HANDLE_KEY);
-    request.onerror = () => reject(request.error || new Error('Could not read local backup handle.'));
-    request.onsuccess = () => resolve(request.result || null);
-    tx.oncomplete = () => db.close();
-    tx.onerror = () => { db.close(); reject(tx.error || new Error('Could not read local backup handle.')); };
-  });
-}
-
-async function storeFileBackupHandle(handle) {
-  const db = await openFileBackupDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(FILE_BACKUP_STORE, 'readwrite');
-    tx.objectStore(FILE_BACKUP_STORE).put(handle, FILE_BACKUP_HANDLE_KEY);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error || new Error('Could not save local backup handle.')); };
-  });
-}
-
-async function hasFileWritePermission(handle, requestPermission = false) {
-  if (!handle || typeof handle.queryPermission !== 'function') return true;
-  const opts = { mode: 'readwrite' };
-  let permission = await handle.queryPermission(opts);
-  if (permission === 'granted') return true;
-  if (requestPermission && typeof handle.requestPermission === 'function') {
-    permission = await handle.requestPermission(opts);
-  }
-  return permission === 'granted';
-}
-
-async function initFileBackup() {
-  _fileBackupState.supported = fileBackupSupported();
-  if (!_fileBackupState.supported) return _fileBackupState;
-  try {
-    _fileBackupHandle = await readFileBackupHandle();
-    _fileBackupState.enabled = Boolean(_fileBackupHandle);
-    _fileBackupState.error = null;
-  } catch (error) {
-    _fileBackupState.enabled = false;
-    _fileBackupState.error = 'Local file backup is not connected.';
-  }
-  return _fileBackupState;
-}
-
-function ensureFileBackupInit() {
-  if (!_fileBackupInitPromise) _fileBackupInitPromise = initFileBackup();
-  return _fileBackupInitPromise;
-}
-
-async function writeFileBackup(json, requestPermission = false) {
-  _fileBackupState.supported = fileBackupSupported();
-  if (!_fileBackupState.supported) {
-    _fileBackupState.enabled = false;
-    _fileBackupState.error = 'Local file backup is not supported by this browser.';
-    return false;
-  }
-  if (!_fileBackupHandle) {
-    await ensureFileBackupInit();
-  }
-  if (!_fileBackupHandle) return false;
-  if (!await hasFileWritePermission(_fileBackupHandle, requestPermission)) {
-    _fileBackupState.enabled = true;
-    _fileBackupState.error = 'Permission is needed to update the local backup file.';
-    return false;
-  }
-  try {
-    const writable = await _fileBackupHandle.createWritable();
-    await writable.write(json);
-    await writable.close();
-    _fileBackupState.enabled = true;
-    _fileBackupState.lastSavedAt = new Date().toISOString();
-    _fileBackupState.error = null;
-    return true;
-  } catch (error) {
-    _fileBackupState.error = 'Could not write the local backup file.';
-    return false;
-  }
-}
-
-function scheduleFileBackupWrite(json) {
-  if (!_fileBackupState.enabled && !_fileBackupHandle) return;
-  clearTimeout(_fileBackupWriteTimer);
-  _fileBackupWriteTimer = setTimeout(() => {
-    writeFileBackup(json, false);
-  }, 600);
-}
-
-async function enableLocalFileBackup() {
-  if (!fileBackupSupported()) {
-    throw new Error('This browser does not support automatic local file backup. Use Export Backup instead.');
-  }
-  const handle = await window.showSaveFilePicker({
-    suggestedName: 'deutschdaily-progress-backup.json',
-    types: [{
-      description: 'DeutschDaily progress backup',
-      accept: { 'application/json': ['.json'] },
-    }],
-  });
-  if (!await hasFileWritePermission(handle, true)) {
-    throw new Error('Permission denied for the local backup file.');
-  }
-  await storeFileBackupHandle(handle);
-  _fileBackupHandle = handle;
-  _fileBackupState.enabled = true;
-  await writeFileBackup(backupExportJson(true), true);
-  return getLocalBackupStatus();
-}
-
-async function writeLocalFileBackupNow() {
-  if (!_fileBackupHandle) await ensureFileBackupInit();
-  if (!_fileBackupHandle) return enableLocalFileBackup();
-  await writeFileBackup(backupExportJson(true), true);
-  return getLocalBackupStatus();
-}
-
-function getLocalBackupStatus() {
-  _fileBackupState.supported = fileBackupSupported();
-  return { ..._fileBackupState };
-}
-
 async function load() {
   let storageError = null;
   let primary = null;
   let mirror = null;
   let legacy = null;
-  const syncFileBackup = () => {
-    ensureFileBackupInit().then(() => {
-      if (_fileBackupState.enabled) scheduleFileBackupWrite(backupExportJson(true));
-    });
-  };
   try {
     primary = parseStoredDb(SKEY, localStorage.getItem(SKEY));
     mirror = parseStoredDb(SKEY_BACKUP, localStorage.getItem(SKEY_BACKUP));
@@ -498,11 +338,9 @@ async function load() {
         ? `Current saved progress was missing or corrupted; recovered from the browser backup mirror${recoverySaved ? ' and saved a raw recovery copy.' : '.'}`
         : 'Old backup progress was corrupted and ignored.';
       DB.storageError = storageError;
-      syncFileBackup();
       return;
     }
     save();
-    syncFileBackup();
     return;
   }
 
@@ -515,7 +353,6 @@ async function load() {
   }
   if (storageError) DB.storageError = storageError;
   if (!corruptCandidates.length) save();
-  syncFileBackup();
 }
 
 function save() {
@@ -526,7 +363,6 @@ function save() {
   catch (e) { }
   try { if (window.storage) window.storage.set(SKEY, json); }
   catch (e) { }
-  scheduleFileBackupWrite(backupExportJson(true));
 }
 
 function recordStudy() {

@@ -12,7 +12,7 @@ DeutschDaily is an offline-first daily German practice app focused on useful res
 - Text-to-speech support with browser speech synthesis plus optional desktop fallback voices when network audio is available
 - Learn more panels with grammar, variants, reuse ideas, likely replies, and active practice tasks
 - Formal and informal variants where `Sie` / `du` matters
-- Offline local progress storage with export/import and optional local backup file
+- Offline local progress storage with export/import backups
 - Minimal SVG app logo for browser tabs and bookmarks
 
 ## Run Locally

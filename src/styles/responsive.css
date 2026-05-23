@@ -49,15 +49,6 @@
     flex-direction: column;
   }
 
-  .backup-card {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .backup-actions {
-    min-width: 0;
-  }
-
   .learn-grid {
     grid-template-columns: 1fr;
   }
