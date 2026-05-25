@@ -487,7 +487,7 @@ addSeed(ss('ph15', 'phone', 'Ich brauche einen neuen Code.', 'I need a new code.
 addSeed(ss('ph16', 'phone', 'Die App funktioniert nicht.', 'The app is not working.', 'dee ap foongk-tsyo-NEERT nikht', 'Use with support when an app blocks the next step.', 'A2', 'formal', ['not_working'], { swaps: [['thing', 'die App, die Seite, der Link']], expectedReply: 'Support may ask which device, browser, or error message you see.', learnerReply: 'Ich bekomme eine Fehlermeldung.', practice: 'Say the app is not working, then add the error message.' }));
 
 updateSeed('wk5', { de: 'Können wir kurz klären, was zuerst wichtig ist?', en: 'Can we quickly clarify what is important first?', ph: 'KUH-nen veer koorts KLAY-ren, vas tsoo-AIRST VIKH-tikh ist', vocab: [{ de: 'die Priorität', en: 'priority' }] });
-updateSeed('wk6', { vocab: [{ de: 'mir fehlen', en: 'I am missing / I still need' }] });
+updateSeed('wk6', { vocab: [{ de: 'mir fehlen', en: 'I still need / I am missing', note: 'useful phrase' }, { de: 'fehlen', en: 'to be missing', note: 'verb' }, { de: 'noch', en: 'still / yet' }, { de: 'die Informationen', en: 'information / details' }] });
 updateSeed('wk10', { de: 'Ich melde mich, wenn ich fertig bin.', en: 'I will get back to you when I am finished.', ph: 'ikh MEL-deh mikh, ven ikh FER-tikh bin', vocab: [{ de: 'sich melden', en: 'to get back in touch' }], learnTitle: 'Ich melde mich, wenn ...', learnGrammar: 'Sich melden means to get in touch. Wenn starts a small second clause, so bin goes to the end.', practice: 'Promise to get back when one condition is true.' });
 updateSeed('wk11', { vocab: [{ de: 'besprechen', en: 'to discuss' }] });
 updateSeed('wk19', { vocab: [{ de: 'die Gehaltsabrechnung', en: 'payslip' }] });

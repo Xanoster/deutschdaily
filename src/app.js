@@ -311,14 +311,11 @@ function renderRevealDetails(s, compact = false, idPrefix = 'rd-') {
   if (!learn) return '';
   const vocab = revealVocabItems(s);
   const variants = Array.isArray(learn.variants) ? learn.variants : [];
-  const meaningText = learn.meaning || s.en;
-  const meaningHtml = `<div class="reveal-box"><div class="reveal-box-title">Meaning</div><div>${esc(meaningText)}</div></div>`;
-  const vocabHtml = vocab.length ? `<div class="reveal-box"><div class="reveal-box-title">Important vocab</div>${vocab.map(item => `<div class="vocab-row"><strong lang="de">${esc(item.de)}</strong><span>${esc(item.en)}${item.note ? ` · ${esc(item.note)}` : ''}</span></div>`).join('')}</div>` : '';
+  const vocabHtml = vocab.length ? `<div class="reveal-box"><div class="reveal-box-title">Sentence vocab</div>${vocab.map(item => `<div class="vocab-row"><strong lang="de">${esc(item.de)}</strong><span>${esc(item.en)}${item.note ? ` · ${esc(item.note)}` : ''}</span></div>`).join('')}</div>` : '';
   const variantsHtml = variants.length ? `<div class="reveal-box"><div class="reveal-box-title">Formal / informal</div>${variants.map(v => `<div class="vocab-row"><strong>${esc(v.label)}</strong><span lang="de">${esc(v.de)}</span></div>`).join('')}</div>` : '';
   const style = compact ? '' : ' style="display:none"';
   return `<div class="reveal-details${compact ? ' compact' : ''}" id="${idPrefix}${s.id}"${style}>
 <div class="reveal-grid">
-  ${meaningHtml}
   ${vocabHtml}
   ${variantsHtml}
 </div>

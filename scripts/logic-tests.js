@@ -265,8 +265,8 @@ assert.strictEqual(t.getViewState().historyDay, '2026-05-02', 'history URL selec
 
 const revealCard = t.SENTENCES.find(sentence => Array.isArray(sentence.vocab) && sentence.vocab.length > 0);
 const revealHtml = t.renderRevealDetails(revealCard, true, 'logic-');
-assert(revealHtml.includes('Meaning'), 'revealed details should include sentence meaning');
-assert(revealHtml.includes('Important vocab'), 'revealed details should include important vocab');
+assert(!revealHtml.includes('Meaning'), 'revealed details should not repeat the already visible translation');
+assert(revealHtml.includes('Sentence vocab'), 'revealed details should include sentence vocab');
 assert(!revealHtml.includes('Expected reply'), 'revealed details should not include expected reply guidance');
 assert(!revealHtml.includes('Why it works'), 'revealed details should not include grammar guidance');
 assert(!revealHtml.includes('Practice:'), 'revealed details should not include practice prompts');
