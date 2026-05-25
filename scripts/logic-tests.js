@@ -11,7 +11,7 @@ const source = [
   read('src/learning.js'),
   read('src/storage.js'),
   read('src/app.js'),
-  'renderPractice = () => {}; updateHeader = () => {};',
+  'renderPractice = () => {}; updateHeader = () => {}; render = () => {};',
   `globalThis.__test = {
     SENTENCES,
     normalizeDb,
@@ -32,6 +32,12 @@ const source = [
     setPracticeState: value => { P = value; },
     getPracticeState: () => P,
     DB: () => DB,
+    stateFromUrl,
+    urlFromState,
+    applyUrlState,
+    normalizePatternFilter,
+    renderRevealDetails,
+    getViewState: () => V,
   };`
 ].join('\n');
 
@@ -60,6 +66,22 @@ const sandbox = {
   console,
   window: {
     __DD_SKIP_AUTO_INIT: true,
+    location: { href: 'http://localhost/DEDaily.html', pathname: '/DEDaily.html', search: '' },
+    history: {
+      pushState: (_state, _title, url) => {
+        const next = new URL(url, 'http://localhost/DEDaily.html');
+        sandbox.window.location.href = next.href;
+        sandbox.window.location.pathname = next.pathname;
+        sandbox.window.location.search = next.search;
+      },
+      replaceState: (_state, _title, url) => {
+        const next = new URL(url, 'http://localhost/DEDaily.html');
+        sandbox.window.location.href = next.href;
+        sandbox.window.location.pathname = next.pathname;
+        sandbox.window.location.search = next.search;
+      },
+    },
+    addEventListener: () => {},
     storage: { set: () => {} },
     speechSynthesis: {
       getVoices: () => [],
@@ -83,10 +105,11 @@ const sandbox = {
     querySelector: () => null,
     querySelectorAll: () => [],
   },
-  URL: {
+  URLSearchParams,
+  URL: Object.assign(URL, {
     createObjectURL: () => 'blob:logic-test',
     revokeObjectURL: () => {},
-  },
+  }),
   Blob: function Blob() {},
   Audio: function Audio() {
     return { play: () => Promise.resolve(), pause: () => {}, addEventListener: () => {} };
@@ -216,5 +239,34 @@ t.load();
 assert(t.DB().learned.has('un1'), 'valid legacy progress is recovered when current progress is corrupt');
 assert.strictEqual(store.dd_v4, '{bad json', 'recovering from legacy progress must not overwrite corrupt current progress');
 assert(store.dd_v4_recovery && store.dd_v4_recovery.includes('{bad json'), 'recovered corrupt current progress keeps a raw recovery copy');
+
+
+const browseState = t.stateFromUrl('http://localhost/DEDaily.html?view=browse&topic=health&filter=unlearned');
+assert.strictEqual(browseState.view, 'browse', 'browse URL state should parse view');
+assert.strictEqual(browseState.topicId, 'health', 'browse URL state should parse topic');
+assert.strictEqual(browseState.filter, 'unlearned', 'browse URL state should parse filter');
+
+const patternUrl = t.urlFromState({ view: 'patterns', patFilter: 'due' });
+assert.strictEqual(patternUrl, '/DEDaily.html?view=patterns&filter=due', 'pattern URL should serialize filter');
+assert.strictEqual(t.normalizePatternFilter('all'), 'all', 'known pattern filters are preserved');
+assert.strictEqual(t.normalizePatternFilter('new'), 'learning', 'unknown/legacy pattern filters default to learning');
+
+t.applyUrlState('http://localhost/DEDaily.html?view=patterns');
+assert.strictEqual(t.getViewState().view, 'patterns', 'patterns URL opens Patterns tab');
+assert.strictEqual(t.getViewState().patFilter, 'learning', 'Patterns tab defaults to Learning');
+
+t.applyUrlState('http://localhost/DEDaily.html?view=library&tab=learned');
+assert.strictEqual(t.getViewState().view, 'saved', 'library URL opens Library tab');
+assert.strictEqual(t.getViewState().libTab, 'learned', 'library URL selects learned subtab');
+
+t.applyUrlState('http://localhost/DEDaily.html?view=history&day=2026-05-02');
+assert.strictEqual(t.getViewState().view, 'history-day', 'dated history URL opens History day view');
+assert.strictEqual(t.getViewState().historyDay, '2026-05-02', 'history URL selects normalized day');
+
+const revealCard = t.SENTENCES.find(sentence => Array.isArray(sentence.vocab) && sentence.vocab.length > 0);
+const revealHtml = t.renderRevealDetails(revealCard, true, 'logic-');
+assert(revealHtml.includes('Important vocab'), 'revealed details should include important vocab');
+assert(revealHtml.includes('Expected reply'), 'revealed details should include expected reply guidance');
+assert(!revealHtml.includes('Learn' + ' more'), 'revealed details must not contain old reveal-button copy');
 
 console.log('logic-tests passed');

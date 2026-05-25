@@ -49,10 +49,6 @@
     flex-direction: column;
   }
 
-  .learn-grid {
-    grid-template-columns: 1fr;
-  }
-
   .mobile-nav {
     display: flex;
   }

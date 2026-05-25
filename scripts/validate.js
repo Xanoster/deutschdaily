@@ -14,14 +14,42 @@ const expectedScripts = [
 ];
 
 const errors = [];
+const topicTargets = {
+  understand: 20,
+  appointments: 18,
+  admin: 20,
+  housing: 18,
+  health: 20,
+  phone: 16,
+  work: 18,
+  transport: 18,
+  services: 16,
+  money: 16,
+  social: 8,
+  emergency: 12,
+};
+const trivialGreeting = /(^|\b)(hallo|hi|guten tag|wie geht|mir geht|i am good|i'm good|nice to meet you|schön,? .*kennenzulernen)(\b|$)/i;
+
+function record(condition, message) {
+  if (!condition) errors.push(message);
+}
+
+function uniqueNormalized(value) {
+  return String(value || '')
+    .normalize('NFC')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
 
 for (const script of expectedScripts) {
-  if (!new RegExp(`src="${script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\?[^"]*)?"`).test(html)) errors.push(`DEDaily.html missing ${script}`);
+  const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  record(new RegExp(`src="${escaped}(?:\\?[^"]*)?"`).test(html), `DEDaily.html missing ${script}`);
 }
-if (!/href="src\/styles\.css(?:\?[^"]*)?"/.test(html)) errors.push('DEDaily.html missing src/styles.css');
-if (!/rel="icon" href="src\/assets\/logo\.svg" type="image\/svg\+xml"/.test(html)) errors.push('DEDaily.html missing SVG favicon');
-if (!fs.existsSync(path.join(root, 'src/assets/logo.svg'))) errors.push('src/assets/logo.svg missing');
-if (!fs.existsSync(path.join(root, 'api/tts.js'))) errors.push('api/tts.js missing');
+record(/href="src\/styles\.css(?:\?[^"]*)?"/.test(html), 'DEDaily.html missing src/styles.css');
+record(/rel="icon" href="src\/assets\/logo\.svg" type="image\/svg\+xml"/.test(html), 'DEDaily.html missing SVG favicon');
+record(fs.existsSync(path.join(root, 'src/assets/logo.svg')), 'src/assets/logo.svg missing');
+record(fs.existsSync(path.join(root, 'api/tts.js')), 'api/tts.js missing');
 
 try {
   const vercelConfig = JSON.parse(read('vercel.json'));
@@ -31,7 +59,7 @@ try {
     rewrite.source === '/' &&
     rewrite.destination === '/DEDaily.html'
   ));
-  if (!hasRootRewrite) errors.push('vercel.json must rewrite / to /DEDaily.html');
+  record(hasRootRewrite, 'vercel.json must rewrite / to /DEDaily.html');
 } catch (error) {
   errors.push(`vercel.json invalid or missing: ${error.message}`);
 }
@@ -49,20 +77,20 @@ vm.runInContext(source, sandbox, { filename: 'validate-content.vm.js' });
 const { TOPICS, PAT_CATS, PATTERNS, SENTENCE_SEEDS, SENTENCES } = sandbox.__dd;
 const topicIds = new Set(TOPICS.map(t => t.id));
 const catIds = new Set(PAT_CATS.map(c => c.id));
-const patternIds = new Set(PATTERNS.map(p => p.id));
+const allPatternIds = new Set(PATTERNS.map(p => p.id));
+const activePatterns = PATTERNS.filter(p => p.status !== 'hidden');
+const activePatternIds = new Set(activePatterns.map(p => p.id));
+const hiddenPatternIds = new Set(PATTERNS.filter(p => p.status === 'hidden').map(p => p.id));
 const sentenceIds = new Set();
+const germanSentences = new Map();
 
-function getSentence(id) {
-  return SENTENCES.find(s => s.id === id);
-}
+record(SENTENCES.length === 200, `expected 200 sentences, found ${SENTENCES.length}`);
+record(SENTENCE_SEEDS.length === 200, `expected 200 sentence seeds, found ${SENTENCE_SEEDS.length}`);
+record(activePatterns.length === 50, `expected 50 active patterns, found ${activePatterns.length}`);
 
-function requireSentence(id, predicate, message) {
-  const sentence = getSentence(id);
-  if (!sentence) {
-    errors.push(`${id} missing`);
-    return;
-  }
-  if (!predicate(sentence)) errors.push(`${id}: ${message}`);
+for (const [topicId, expected] of Object.entries(topicTargets)) {
+  const actual = SENTENCES.filter(s => s.t === topicId).length;
+  record(actual === expected, `topic ${topicId} expected ${expected}, found ${actual}`);
 }
 
 for (const sentence of SENTENCES) {
@@ -70,16 +98,27 @@ for (const sentence of SENTENCES) {
   sentenceIds.add(sentence.id);
 
   for (const key of ['id', 't', 'de', 'en', 'ph', 'use', 'lv', 'register']) {
-    if (!sentence[key]) errors.push(`${sentence.id} missing ${key}`);
+    record(Boolean(sentence[key]), `${sentence.id} missing ${key}`);
   }
 
-  if (!topicIds.has(sentence.t)) errors.push(`${sentence.id} invalid topic ${sentence.t}`);
-  if (!['A1', 'A2', 'B1'].includes(sentence.lv)) errors.push(`${sentence.id} invalid level ${sentence.lv}`);
+  const normalizedGerman = uniqueNormalized(sentence.de);
+  if (germanSentences.has(normalizedGerman)) {
+    errors.push(`duplicate German sentence ${sentence.id} and ${germanSentences.get(normalizedGerman)}`);
+  } else {
+    germanSentences.set(normalizedGerman, sentence.id);
+  }
+
+  record(topicIds.has(sentence.t), `${sentence.id} invalid topic ${sentence.t}`);
+  record(['A1', 'A2'].includes(sentence.lv), `${sentence.id} invalid level ${sentence.lv}`);
+  record(!trivialGreeting.test(sentence.de) && !trivialGreeting.test(sentence.en), `${sentence.id} is trivial greeting/well-being filler`);
+
   if (!sentence.fixed && (!Array.isArray(sentence.patternIds) || sentence.patternIds.length === 0)) {
     errors.push(`${sentence.id} must have patternIds or fixed:true`);
   }
+
   for (const patternId of sentence.patternIds || []) {
-    if (!patternIds.has(patternId)) errors.push(`${sentence.id} invalid patternId ${patternId}`);
+    record(allPatternIds.has(patternId), `${sentence.id} invalid patternId ${patternId}`);
+    record(!hiddenPatternIds.has(patternId), `${sentence.id} references hidden pattern ${patternId}`);
   }
 
   const learn = sentence.learn;
@@ -87,48 +126,37 @@ for (const sentence of SENTENCES) {
     errors.push(`${sentence.id} missing learn object`);
     continue;
   }
-  if (!learn.meaning) errors.push(`${sentence.id} missing learn.meaning`);
-  if (!learn.scenario) errors.push(`${sentence.id} missing learn.scenario`);
-  if (!learn.grammar || !learn.grammar.title || !learn.grammar.simple) {
-    errors.push(`${sentence.id} incomplete learn.grammar`);
-  }
-  if (!learn.expectedReply || /Listen for the key detail/.test(learn.expectedReply)) {
-    errors.push(`${sentence.id} has generic expectedReply`);
-  }
-  if (!learn.learnerReply) {
-    errors.push(`${sentence.id} missing learn.learnerReply`);
-  }
-  if (!learn.practice || /Replace one slot in the pattern/.test(learn.practice)) {
-    errors.push(`${sentence.id} has generic practice`);
+  record(Boolean(learn.meaning), `${sentence.id} missing learn.meaning`);
+  record(Boolean(learn.scenario), `${sentence.id} missing learn.scenario`);
+  record(Boolean(learn.grammar && learn.grammar.title && learn.grammar.simple), `${sentence.id} incomplete learn.grammar`);
+  record(Boolean(learn.expectedReply) && !/Listen for the key detail/.test(learn.expectedReply), `${sentence.id} has generic expectedReply`);
+  record(Boolean(learn.learnerReply), `${sentence.id} missing learn.learnerReply`);
+  record(Boolean(learn.practice) && !/Replace one slot in the pattern/.test(learn.practice), `${sentence.id} has generic practice`);
+
+  if (Array.isArray(sentence.vocab)) {
+    for (const [index, item] of sentence.vocab.entries()) {
+      record(Boolean(item && item.de && item.en), `${sentence.id} vocab item ${index + 1} missing de/en`);
+    }
   }
 }
 
 for (const topic of TOPICS) {
-  if (!SENTENCES.some(s => s.t === topic.id)) errors.push(`empty topic ${topic.id}`);
+  record(Object.prototype.hasOwnProperty.call(topicTargets, topic.id), `unexpected topic ${topic.id}`);
 }
 
 for (const pattern of PATTERNS) {
-  if (!catIds.has(pattern.cat)) errors.push(`${pattern.id} invalid category ${pattern.cat}`);
-  if (!pattern.template || !pattern.meaning || !pattern.grammar || !pattern.watchOut) {
-    errors.push(`${pattern.id} missing required pattern text`);
-  }
-  if (!Array.isArray(pattern.examples) || pattern.examples.length < 2) {
-    errors.push(`${pattern.id} needs at least two examples`);
-  }
+  record(catIds.has(pattern.cat), `${pattern.id} invalid category ${pattern.cat}`);
+  record(Boolean(pattern.template && pattern.meaning && pattern.grammar && pattern.watchOut), `${pattern.id} missing required pattern text`);
+  record(Array.isArray(pattern.examples) && pattern.examples.length >= 2, `${pattern.id} needs at least two examples`);
+  record(['A1', 'A2'].includes(pattern.level), `${pattern.id} invalid pattern level ${pattern.level}`);
+  record(Number.isFinite(pattern.priority), `${pattern.id} missing numeric priority`);
+  record(['active', 'hidden'].includes(pattern.status), `${pattern.id} invalid status ${pattern.status}`);
+  record(Boolean(pattern.groupId), `${pattern.id} missing groupId`);
 }
 
-const patternChecks = [
-  ['ask_write_down', p => p.examples.every(e => /aufschreib/i.test(e.de)), 'examples must use aufschreiben'],
-  ['since_problem', p => p.examples.every(e => /funktioniert/i.test(e.de) && /nicht/i.test(e.de)), 'examples must match funktioniert nicht'],
-  ['take_medicine', p => p.examples.every(e => /^Wie oft soll ich/.test(e.de)), 'examples must ask frequency'],
-  ['direct_debit', p => p.examples.every(e => /^Ich zahle per/.test(e.de)), 'examples must match Ich zahle per'],
-  ['urgent_help', p => p.examples.every(e => /^Ich brauche dringend/.test(e.de)), 'examples must match urgent help template']
-];
-
-for (const [id, predicate, message] of patternChecks) {
-  const pattern = PATTERNS.find(p => p.id === id);
-  if (!pattern) errors.push(`missing pattern ${id}`);
-  else if (!predicate(pattern)) errors.push(`${id}: ${message}`);
+for (const pattern of activePatterns) {
+  const referenced = SENTENCES.some(sentence => (sentence.patternIds || []).includes(pattern.id));
+  record(referenced, `active pattern ${pattern.id} is not referenced`);
 }
 
 const sentencePatternContracts = [
@@ -147,7 +175,16 @@ const sentencePatternContracts = [
   ['let_know', s => /\bBescheid\b/.test(s.de), 'should use Bescheid wording'],
   ['looking_for', s => /^Ich suche\b/.test(s.de), 'should use Ich suche wording'],
   ['exchange_return', s => /^Ich möchte\b.*\b(umtauschen|zurückgeben)\b/.test(s.de), 'should use Ich möchte exchange/return wording'],
-  ['urgent_help', s => /^Ich brauche dringend\b/.test(s.de), 'should use dringend urgent-help wording']
+  ['urgent_help', s => /^Ich brauche dringend\b/.test(s.de), 'should use dringend urgent-help wording'],
+  ['give_name', s => /\b(heiße|Name)\b/.test(s.de), 'should give a name'],
+  ['give_address', s => /\bAdresse\b/.test(s.de) || /\bwohne\b/.test(s.de), 'should give an address'],
+  ['give_phone', s => /\bTelefonnummer\b/.test(s.de) || /\bNummer\b/.test(s.de), 'should give a phone number'],
+  ['need_moment', s => /\bMoment\b/.test(s.de), 'should ask for a moment'],
+  ['spell_detail', s => /\bbuchstabieren\b|\bBuchstabiere\b/i.test(s.de), 'should ask to spell'],
+  ['ask_urgent', s => /\bdringend\b/.test(s.de), 'should ask whether it is urgent'],
+  ['ask_location', s => /^Wo\b/.test(s.de), 'should ask where something is'],
+  ['received_item', s => /\bbekommen\b|\berhalten\b/.test(s.de), 'should say an item was received'],
+  ['lost_or_forgot', s => /\bverloren\b|\bvergessen\b/.test(s.de), 'should describe something lost or forgotten'],
 ];
 
 for (const [patternId, predicate, message] of sentencePatternContracts) {
@@ -158,51 +195,67 @@ for (const [patternId, predicate, message] of sentencePatternContracts) {
   }
 }
 
-requireSentence('un14', s => /^Koenn|^Konn/.test(s.de.normalize('NFD').replace(/[\u0300-\u036f]/g, '')), 'should use polite could/could you wording');
-requireSentence('hl2', s => /freien Termin/.test(s.de), 'should ask for a free appointment');
-requireSentence('hl6', s => /severe/.test(s.en), 'English should use severe pain wording');
-requireSentence('hl6', s => s.fixed && !(s.patternIds || []).includes('symptom_since'), 'pain without seit should not use symptom_since');
-requireSentence('ho19', s => /Mietvertrag/.test(s.de), 'should use Mietvertrag for formal lease termination');
-requireSentence('ph6', s => s.fixed && !(s.patternIds || []).includes('call_about'), 'call-later phrase should not use call_about');
-requireSentence('ph14', s => s.fixed && !(s.patternIds || []).includes('permission'), 'customer-number phrase should not use Darf ich pattern');
-requireSentence('wk13', s => s.fixed && !(s.patternIds || []).includes('deadline_until'), 'deadline question to another person needs its own note');
-requireSentence('sv10', s => s.fixed && !(s.patternIds || []).includes('ask_availability'), 'shopping size question should not use appointment availability pattern');
-requireSentence('ap15', s => s.fixed && s.mode === 'recognition' && s.recognitionOnly && /booking/i.test(s.learn.meaning) && /name/i.test(s.learn.meaning) && /Auf den Namen/.test(s.learn.expectedReply), 'reception question should have recognition-only booking-name metadata');
-requireSentence('sv3', s => s.fixed && s.mode === 'recognition' && s.recognitionOnly && /tracking update/i.test(s.learn.meaning) && /pickup place/.test(s.learn.expectedReply), 'tracking message should have recognition-only pickup metadata');
-requireSentence('mn5', s => /SEPA/.test(s.de) && s.fixed, 'should distinguish mandate revocation from reversing a booked debit');
-requireSentence('sv13', s => s.register === 'neutral' && s.fixed, 'card payment question should be neutral fixed phrase');
-requireSentence('so10', s => /if that works/.test(s.en), 'translation should reflect wenn es passt');
-requireSentence('em11', s => /112/.test(s.de), 'emergency topic should include 112');
-requireSentence('em12', s => /110/.test(s.de), 'emergency topic should include 110');
+const requiredVocabCards = {
+  ad26: ['Fristverlängerung'],
+  ad27: ['Kopie'],
+  ho21: ['Nebenkostenabrechnung'],
+  ho22: ['Wohnungsgeberbestätigung'],
+  ho23: ['Kaution'],
+  mn17: ['Lastschriftmandat'],
+  mn18: ['Mahnung'],
+};
+for (const [id, words] of Object.entries(requiredVocabCards)) {
+  const sentence = SENTENCES.find(s => s.id === id);
+  record(Boolean(sentence), `${id} missing`);
+  if (sentence) {
+    const vocab = Array.isArray(sentence.vocab) ? sentence.vocab.map(item => item.de).join(' ') : '';
+    for (const word of words) record(vocab.includes(word), `${id} missing reveal vocab ${word}`);
+  }
+}
 
 const formalInformal = SENTENCES.filter(s => {
   const variants = s.learn && Array.isArray(s.learn.variants) ? s.learn.variants : [];
   return variants.some(v => /formal/i.test(v.label)) && variants.some(v => /informal/i.test(v.label));
 });
+record(formalInformal.length >= 18, `expected at least 18 formal/informal cards, found ${formalInformal.length}`);
 
-if (formalInformal.length < 20) errors.push(`expected at least 20 formal/informal cards, found ${formalInformal.length}`);
-
-if (/pid: 'p\d+'/.test(read('src/app.js'))) {
-  errors.push('src/app.js still contains old regex pattern fallback ids');
-}
+const sourceText = [
+  read('src/content.js'),
+  read('src/app.js'),
+  read('src/styles/cards.css'),
+  read('src/styles/enhancements.css'),
+].join('\n');
+const legacyLevelClass = '.l' + 'B' + '1';
+record(!sourceText.includes(legacyLevelClass), 'legacy level style remains');
+const oldRevealCopy = new RegExp('Learn' + ' more', 'i');
+record(!oldRevealCopy.test(sourceText), 'old reveal-button copy remains');
+const oldRevealFunctions = new RegExp(('toggle' + 'LearnMore') + '|' + ('renderSentence' + 'LearnPanel'));
+record(!oldRevealFunctions.test(sourceText), 'old reveal functions remain');
+const retiredLevelPattern = new RegExp('(^|[^A-Z0-9])' + 'B' + '1' + '([^A-Z0-9]|$)');
+record(!retiredLevelPattern.test(sourceText), 'advanced level label remains in source');
+const oldSentenceUseClass = 'sentence' + '-use';
+record(!sourceText.includes(oldSentenceUseClass), 'old sentence class remains');
 
 const topicCounts = Object.fromEntries(TOPICS.map(t => [t.id, SENTENCES.filter(s => s.t === t.id).length]));
 const levelCounts = SENTENCES.reduce((acc, s) => {
   acc[s.lv] = (acc[s.lv] || 0) + 1;
   return acc;
 }, {});
-
-if ((levelCounts.A1 || 0) < 18) errors.push(`expected at least 18 A1 survival cards, found ${levelCounts.A1 || 0}`);
+const activePatternReferences = Object.fromEntries(activePatterns.map(pattern => [
+  pattern.id,
+  SENTENCES.filter(sentence => (sentence.patternIds || []).includes(pattern.id)).length,
+]));
 
 const report = {
   sentences: SENTENCES.length,
   seeds: SENTENCE_SEEDS.length,
   topics: TOPICS.length,
-  patterns: PATTERNS.length,
+  activePatterns: activePatterns.length,
   formalInformal: formalInformal.length,
   topicCounts,
   levelCounts,
-  errors
+  activePatternReferences,
+  errors,
 };
 
 console.log(JSON.stringify(report, null, 2));

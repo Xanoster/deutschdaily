@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
-let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'all', historyDay: null };
+let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', historyDay: null };
 
 // ══════════════════════════════════════════════
 // PATTERN DETECTION FOR SENTENCES
@@ -11,13 +11,110 @@ function findMatchingPattern(sentence) {
   if (explicit) return explicit;
   return null;
 }
+const VALID_VIEWS = new Set(['today', 'browse', 'patterns', 'saved', 'history', 'history-day', 'stats']);
+const VALID_FILTERS = new Set(['all', 'unlearned', 'learned', 'favorites']);
+const VALID_PATTERN_FILTERS = new Set(['learning', 'due', 'understood', 'all']);
+const VALID_LIBRARY_TABS = new Set(['saved', 'learned']);
+const TOPIC_IDS = new Set(TOPICS.map(t => t.id));
+
+function normalizeViewName(view) {
+  const raw = String(view || 'today');
+  if (raw === 'library') return 'saved';
+  return VALID_VIEWS.has(raw) ? raw : 'today';
+}
+function normalizePatternFilter(value) {
+  const raw = String(value || 'learning');
+  if (raw === 'new') return 'learning';
+  return VALID_PATTERN_FILTERS.has(raw) ? raw : 'learning';
+}
+function stateFromUrl(href) {
+  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', historyDay: null };
+  let params;
+  try {
+    const base = window.location && window.location.href ? window.location.href : 'http://localhost/';
+    params = new URL(href || base, base).searchParams;
+  } catch (error) {
+    params = new URLSearchParams(window.location ? window.location.search : '');
+  }
+  const viewParam = params.get('view');
+  const view = normalizeViewName(viewParam || 'today');
+  const topic = params.get('topic');
+  const filter = params.get('filter');
+  const tab = params.get('tab');
+  const day = normalizeDateKey(params.get('day'));
+
+  if (view === 'browse') {
+    fallback.view = 'browse';
+    fallback.topicId = topic && TOPIC_IDS.has(topic) ? topic : null;
+    fallback.filter = VALID_FILTERS.has(filter) ? filter : 'all';
+  } else if (view === 'patterns') {
+    fallback.view = 'patterns';
+    fallback.patFilter = normalizePatternFilter(filter);
+  } else if (view === 'saved') {
+    fallback.view = 'saved';
+    fallback.libTab = VALID_LIBRARY_TABS.has(tab) ? tab : 'saved';
+  } else if (view === 'history') {
+    fallback.view = day ? 'history-day' : 'history';
+    fallback.historyDay = day;
+  } else if (view === 'history-day') {
+    fallback.view = day ? 'history-day' : 'history';
+    fallback.historyDay = day;
+  } else {
+    fallback.view = view;
+  }
+  return fallback;
+}
+function urlFromState(state = V) {
+  const params = new URLSearchParams();
+  const view = normalizeViewName(state.view);
+  const publicView = view === 'saved' ? 'library' : view === 'history-day' ? 'history' : view;
+  if (publicView !== 'today') params.set('view', publicView);
+  if (view === 'browse') {
+    if (state.topicId && TOPIC_IDS.has(state.topicId)) params.set('topic', state.topicId);
+    if (state.filter && state.filter !== 'all') params.set('filter', state.filter);
+  } else if (view === 'patterns') {
+    params.set('filter', normalizePatternFilter(state.patFilter));
+  } else if (view === 'saved') {
+    if (state.libTab && state.libTab !== 'saved') params.set('tab', state.libTab);
+  } else if (view === 'history-day' && state.historyDay) {
+    params.set('day', state.historyDay);
+  }
+  const query = params.toString();
+  const pathname = window.location && window.location.pathname ? window.location.pathname : '/';
+  return query ? `${pathname}?${query}` : pathname;
+}
+function applyUrlState(href) {
+  const next = stateFromUrl(href);
+  V.view = next.view;
+  V.topicId = next.topicId;
+  V.filter = next.filter;
+  V.query = '';
+  V.libTab = next.libTab;
+  V.patFilter = next.patFilter;
+  V.historyDay = next.historyDay;
+}
+function syncUrl(replace = false) {
+  if (!window.history || !window.location) return;
+  const next = urlFromState(V);
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (next === current) return;
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({ view: V.view }, '', next);
+}
+function commitState({ replace = false, scroll = false } = {}) {
+  syncUrl(replace);
+  render();
+  if (scroll) window.scrollTo(0, 0);
+}
 function nav(view, extra) {
-  V.view = view;
-  V.topicId = view === 'browse' && extra ? extra : null;
+  const nextView = normalizeViewName(view);
+  V.view = nextView;
+  V.topicId = nextView === 'browse' && extra && TOPIC_IDS.has(extra) ? extra : null;
   V.filter = 'all';
   V.query = '';
-  render();
-  window.scrollTo(0, 0);
+  V.historyDay = null;
+  if (nextView === 'patterns') V.patFilter = 'learning';
+  commitState({ scroll: true });
 }
 
 function jsArg(v) {
@@ -204,42 +301,43 @@ function stripLeadingLabel(value, label) {
   return text.replace(new RegExp(`^${escapedLabel}:?\\s*`, 'i'), '').trim();
 }
 
-function renderSentenceLearnPanel(s, compact = false, idPrefix = 'gm-') {
+function revealVocabItems(s, pattern) {
+  const items = [];
+  const add = (de, en, note = '') => {
+    const key = `${de}|${en}`.toLowerCase();
+    if (!de || items.some(item => item.key === key)) return;
+    items.push({ key, de, en, note });
+  };
+  (s.vocab || []).forEach(item => add(item.de, item.en, item.note));
+  (s.chunks || []).forEach(chunk => add(chunk[0], chunk[1]));
+  (s.swaps || []).forEach(([name, examples]) => add(name, examples));
+  if (pattern && Array.isArray(pattern.slots)) {
+    pattern.slots.forEach(slot => add(`[${slot.name}]`, (slot.examples || []).join(', ')));
+  }
+  return items.slice(0, 8);
+}
+function renderRevealDetails(s, compact = false, idPrefix = 'rd-') {
   const learn = s.learn;
   if (!learn) return '';
-  const scenario = learn.scenario;
-  const recognition = learn.mode === 'recognition';
-  const scenarioHtml = scenario && !compact
-    ? `<div class="learn-scenario"><strong>Situation:</strong> ${recognition ? `You hear or read this from ${esc(scenario.speaker)} in a ${esc(scenario.place)}.` : `${esc(scenario.speaker)} speaking to ${esc(scenario.listener)} in a ${esc(scenario.place)} to ${esc(scenario.purpose)}.`}</div>`
-    : '';
-  const useHtml = learn.use ? `<div class="learn-muted" style="margin-top:4px"><strong>Use this when:</strong> ${esc(learn.use)}</div>` : '';
+  const pattern = findMatchingPattern(s);
   const expectedReply = stripLeadingLabel(learn.expectedReply, 'You may hear');
-  const activeHtml = `<div class="learn-box">
-    <div class="learn-box-title">What to say next</div>
-    <div><strong>You may hear:</strong> ${esc(expectedReply)}</div>
-    <div style="margin-top:5px"><strong>You can answer:</strong> ${esc(learn.learnerReply)}</div>
-    <div style="margin-top:5px"><strong>Practice:</strong> ${esc(learn.practice)}</div>
-  </div>`;
-  return `<div class="learn-panel${compact ? ' compact' : ''}" id="${idPrefix}${s.id}">
-<div class="learn-title">Learn more: ${esc(learn.grammar.title)}</div>
-<div><strong>Meaning:</strong> ${esc(learn.meaning)}</div>
-${useHtml}
-${scenarioHtml}
-<div class="learn-grid">
-  <div class="learn-box">
-    <div class="learn-box-title">Why it works</div>
-    <div>${esc(learn.grammar.simple)}</div>
-    ${learn.grammar.watchOut ? `<div style="margin-top:6px"><strong>Watch out:</strong> ${esc(learn.grammar.watchOut)}</div>` : ''}
-  </div>
-  ${activeHtml}
+  const vocab = revealVocabItems(s, pattern);
+  const variants = Array.isArray(learn.variants) ? learn.variants : [];
+  const vocabHtml = vocab.length ? `<div class="reveal-box"><div class="reveal-box-title">Important vocab</div>${vocab.map(item => `<div class="vocab-row"><strong lang="de">${esc(item.de)}</strong><span>${esc(item.en)}${item.note ? ` · ${esc(item.note)}` : ''}</span></div>`).join('')}</div>` : '';
+  const patternHtml = pattern ? `<div class="reveal-box"><div class="reveal-box-title">Pattern</div><div class="reveal-pattern" lang="de">${esc(pattern.template)}</div><div>${esc(pattern.meaning)}</div>${pattern.watchOut ? `<div class="reveal-watch"><strong>Watch out:</strong> ${esc(pattern.watchOut)}</div>` : ''}</div>` : '';
+  const variantsHtml = variants.length ? `<div class="reveal-box"><div class="reveal-box-title">Formal / informal</div>${variants.map(v => `<div class="vocab-row"><strong>${esc(v.label)}</strong><span lang="de">${esc(v.de)}</span></div>`).join('')}</div>` : '';
+  const style = compact ? '' : ' style="display:none"';
+  return `<div class="reveal-details${compact ? ' compact' : ''}" id="${idPrefix}${s.id}"${style}>
+<div class="reveal-title">Details after reveal</div>
+<div class="reveal-grid">
+  <div class="reveal-box"><div class="reveal-box-title">Use</div><div>${esc(s.use)}</div></div>
+  ${vocabHtml}
+  <div class="reveal-box"><div class="reveal-box-title">Why it works</div><div>${esc(learn.grammar.simple)}</div>${learn.grammar.watchOut ? `<div class="reveal-watch"><strong>Watch out:</strong> ${esc(learn.grammar.watchOut)}</div>` : ''}</div>
+  ${patternHtml}
+  ${variantsHtml}
+  <div class="reveal-box"><div class="reveal-box-title">Expected reply</div><div><strong>You may hear:</strong> ${esc(expectedReply)}</div><div class="reveal-watch"><strong>You can answer:</strong> ${esc(learn.learnerReply)}</div><div class="reveal-watch"><strong>Practice:</strong> ${esc(learn.practice)}</div></div>
 </div>
   </div>`;
-}
-
-function toggleLearnMore(id) {
-  const el = document.getElementById('gm-' + id);
-  if (!el) return;
-  el.classList.toggle('open');
 }
 
 function renderVariantPreview(s) {
@@ -263,16 +361,9 @@ function renderSentenceCard(s, i, showTopic) {
   const nextLabel = srsNextLabel(s.id);
   const srsDots = lrn ? `<span class="srs-dots" title="${esc(nextLabel)}">${SRS_INTERVALS.map((_, i) => `<span class="srs-dot${i < srsLvl ? ' filled' : ''}"></span>`).join('')}</span>${nextLabel ? `<span class="srs-next">${esc(nextLabel)}</span>` : ''}` : '';
   const matchedPattern = findMatchingPattern(s);
-  const patTag = matchedPattern ? `<span class="pattern-tag" title="This sentence uses a pattern">🧩 ${matchedPattern.template.replace(/\[.*?\]/g, '…').substring(0, 25)}</span>` : '';
+  const patTag = matchedPattern ? `<span class="pattern-tag" title="This sentence uses a pattern">🧩 ${matchedPattern.template.replace(/\[.*?\]/g, '...').substring(0, 25)}</span>` : '';
   const variantTag = s.learn && s.learn.variants && s.learn.variants.length ? `<span class="pattern-tag" title="Includes formal and informal versions">Sie / du</span>` : '';
   const recognitionTag = isRecognitionSentence(s) ? `<span class="pattern-tag" title="Recognize this phrase and know how to respond">Recognition</span>` : '';
-  const patExplain = matchedPattern ? `<div class="pattern-explain" id="pe-${s.id}">
-<div class="pe-title">🧩 Pattern: ${matchedPattern.template}</div>
-<div class="pe-meaning">${matchedPattern.meaning}</div>
-<div class="pe-examples">Try more sentences with this pattern:
-  ${matchedPattern.examples.filter(e => e.de !== s.de).slice(0, 2).map(e => `<div class="pe-example"><strong>${e.de}</strong> — ${e.en}</div>`).join('')}
-</div>
-  </div>` : '';
   return `<div class="sc${lrn ? ' lrn' : ''}${fav ? ' fav' : ''}" id="sc-${s.id}">
 <div class="sc-top">
   ${showTopic && topic ? `<span class="topic-label">${topic.emoji} ${topic.name}</span>` : ''}
@@ -287,16 +378,11 @@ function renderSentenceCard(s, i, showTopic) {
 <div class="sentence-ph"><span class="ph-lbl">🔊</span>${esc(s.ph)}</div>
 <div class="reveal-hint" id="hn-${s.id}">👆 Tap to reveal translation</div>
 <button class="sentence-en hid reveal-btn" id="en-${s.id}" onclick="toggleReveal('${s.id}')" aria-hidden="true" hidden type="button">${esc(s.en)}</button>
-
-<div class="sentence-use" id="us-${s.id}" style="display:none">💬 ${esc(s.use)}</div>
-${renderVariantPreview(s)}
-${patExplain}
-${renderSentenceLearnPanel(s)}
+${renderRevealDetails(s)}
 <div class="card-actions">
   <button class="act-btn${V.speaking === s.id ? ' is-playing' : ''} speak-btn" data-id="${s.id}" onclick="speak(${jsArg(s.de)},'${s.id}')" type="button">
-    ${ICO.speak} ${V.speaking === s.id ? `<span class="pulse">Playing…</span>` : 'Listen'}
+    ${ICO.speak} ${V.speaking === s.id ? `<span class="pulse">Playing...</span>` : 'Listen'}
   </button>
-  <button class="act-btn" onclick="toggleLearnMore('${s.id}')">🧠 Learn more</button>
   <button class="act-btn${lrn ? ' is-learned' : ''}" id="lrn-btn-${s.id}" onclick="toggleLearned('${s.id}')">
     ${ICO.check} ${lrn ? 'Learned' : 'Mark done'}
   </button>
@@ -308,13 +394,27 @@ ${renderSentenceLearnPanel(s)}
 }
 
 // ─── PATTERNS ────────────────────────────────
+function activePatterns() {
+  return PATTERNS
+    .filter(p => p.status !== 'hidden')
+    .slice()
+    .sort((a, b) => (a.priority || 999) - (b.priority || 999) || a.template.localeCompare(b.template));
+}
+function patternsForFilter(filter, duePatternIds = getPatternReviewIds()) {
+  const due = new Set(duePatternIds);
+  const all = activePatterns();
+  if (filter === 'understood') return all.filter(p => DB.understood.has(p.id));
+  if (filter === 'due') return all.filter(p => due.has(p.id));
+  if (filter === 'all') return all;
+  return all.filter(p => !DB.understood.has(p.id) || due.has(p.id));
+}
 function renderPatterns() {
-  let pats = PATTERNS;
-  if (V.patFilter === 'understood') pats = pats.filter(p => DB.understood.has(p.id));
-  else if (V.patFilter === 'new') pats = pats.filter(p => !DB.understood.has(p.id));
-
-  const undCount = DB.understood.size;
   const duePatternIds = getPatternReviewIds();
+  const pats = patternsForFilter(normalizePatternFilter(V.patFilter), duePatternIds);
+  const active = activePatterns();
+  const undCount = active.filter(p => DB.understood.has(p.id)).length;
+  const learningCount = active.filter(p => !DB.understood.has(p.id) || duePatternIds.includes(p.id)).length;
+  const understoodCount = active.filter(p => DB.understood.has(p.id)).length;
   const duePatternSection = duePatternIds.length ? `<div class="review-section pattern-review-section">
     <div class="review-section-hdr">
       <div class="review-section-title">🧩 Due Pattern Review <span class="review-count-badge">${duePatternIds.length}</span></div>
@@ -323,35 +423,35 @@ function renderPatterns() {
     <div class="review-section-sub">Patterns ready for spaced review.</div>
   </div>` : '';
   const cards = pats.length ? pats.map((p, i) => renderPatternCard(p, i)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No patterns match.</div>`;
-  const allPatIds = JSON.stringify(pats.map(p => p.id)).replace(/"/g, "'");
-  const newPatIds = JSON.stringify(pats.filter(p => !DB.understood.has(p.id)).map(p => p.id)).replace(/"/g, "'");
-  const undPatIds = JSON.stringify(pats.filter(p => DB.understood.has(p.id)).map(p => p.id)).replace(/"/g, "'");
+  const visibleIds = JSON.stringify(pats.map(p => p.id)).replace(/"/g, "'");
+  const learningIds = JSON.stringify(active.filter(p => !DB.understood.has(p.id) || duePatternIds.includes(p.id)).map(p => p.id)).replace(/"/g, "'");
+  const understoodIds = JSON.stringify(active.filter(p => DB.understood.has(p.id)).map(p => p.id)).replace(/"/g, "'");
   return `<div style="padding-top:14px">
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
   <h2 class="page-title" style="margin-top:0">Sentence Patterns</h2>
-  <span style="font-size:12px;font-weight:500;color:var(--purple)">${undCount}/${PATTERNS.length} understood</span>
+  <span style="font-size:12px;font-weight:500;color:var(--purple)">${undCount}/${active.length} understood</span>
 </div>
-<p class="page-sub">Master these ${PATTERNS.length} patterns → build hundreds of sentences</p>
+<p class="page-sub">Master these ${active.length} A1/A2 patterns and reuse them in real situations</p>
 ${duePatternSection}
 
 <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-  ${pats.length > 0 ? `<button onclick="startPatternPractice({ids:${allPatIds}})" style="flex:1;background:var(--purple);color:white;border:none;border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity 0.15s" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">🧩 Practice All (${pats.length})</button>` : ''}
-  ${pats.filter(p => !DB.understood.has(p.id)).length > 0 ? `<button onclick="startPatternPractice({ids:${newPatIds}})" style="flex:1;background:var(--white);border:1px solid var(--purple-border);border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;color:var(--purple);font-family:'Inter',sans-serif;transition:all 0.15s">📚 New Only (${pats.filter(p => !DB.understood.has(p.id)).length})</button>` : ''}
-  ${pats.filter(p => DB.understood.has(p.id)).length > 0 ? `<button onclick="startPatternPractice({ids:${undPatIds}})" style="flex:1;background:var(--white);border:1px solid var(--green-border);border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;color:var(--green);font-family:'Inter',sans-serif;transition:all 0.15s">✅ Learned (${pats.filter(p => DB.understood.has(p.id)).length})</button>` : ''}
+  ${pats.length > 0 ? `<button onclick="startPatternPractice({ids:${visibleIds}})" style="flex:1;background:var(--purple);color:white;border:none;border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity 0.15s" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">🧩 Practice Visible (${pats.length})</button>` : ''}
+  ${learningCount > 0 ? `<button onclick="startPatternPractice({ids:${learningIds}})" style="flex:1;background:var(--white);border:1px solid var(--purple-border);border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;color:var(--purple);font-family:'Inter',sans-serif;transition:all 0.15s">📚 Learning (${learningCount})</button>` : ''}
+  ${understoodCount > 0 ? `<button onclick="startPatternPractice({ids:${understoodIds}})" style="flex:1;background:var(--white);border:1px solid var(--green-border);border-radius:9px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;color:var(--green);font-family:'Inter',sans-serif;transition:all 0.15s">✅ Learned (${understoodCount})</button>` : ''}
 </div>
 
-
 <div class="filter-row">
-  <button class="filter-chip${V.patFilter === 'all' ? ' on' : ''}" onclick="setPatFilter('all')" aria-pressed="${V.patFilter === 'all'}" type="button">All</button>
-  <button class="filter-chip${V.patFilter === 'new' ? ' on' : ''}" onclick="setPatFilter('new')" aria-pressed="${V.patFilter === 'new'}" type="button">📚 To Learn</button>
+  <button class="filter-chip${V.patFilter === 'learning' ? ' on' : ''}" onclick="setPatFilter('learning')" aria-pressed="${V.patFilter === 'learning'}" type="button">📚 Learning</button>
+  <button class="filter-chip${V.patFilter === 'due' ? ' on' : ''}" onclick="setPatFilter('due')" aria-pressed="${V.patFilter === 'due'}" type="button">🔁 Due</button>
   <button class="filter-chip${V.patFilter === 'understood' ? ' on' : ''}" onclick="setPatFilter('understood')" aria-pressed="${V.patFilter === 'understood'}" type="button">✅ Understood</button>
+  <button class="filter-chip${V.patFilter === 'all' ? ' on' : ''}" onclick="setPatFilter('all')" aria-pressed="${V.patFilter === 'all'}" type="button">All</button>
 </div>
 
 ${cards}
   </div>`;
 }
 
-function setPatFilter(f) { V.patFilter = f; render(); }
+function setPatFilter(f) { V.patFilter = normalizePatternFilter(f); commitState(); }
 
 const PATTERN_INFORMAL_EXAMPLES = {
   polite_request_modal: { de: 'Könntest du bitte langsamer sprechen?', en: 'Could you please speak more slowly?' },
@@ -402,7 +502,7 @@ ${informal ? `<div class="pat-informal">
 }
 
 // ─── SAVED / LIBRARY ─────────────────────────
-function setLibTab(tab) { V.libTab = tab; render(); }
+function setLibTab(tab) { V.libTab = VALID_LIBRARY_TABS.has(tab) ? tab : 'saved'; commitState(); }
 
 function renderSaved() {
   const favSents = SENTENCES.filter(s => DB.favorites.has(s.id));
@@ -517,8 +617,8 @@ function reviewForecast(days = 7) {
 function renderStats() {
   const tot = SENTENCES.length, done = DB.learned.size, fav = DB.favorites.size, und = DB.understood.size;
   const completion = pct(done, tot);
-  const lvColors = { A1: '#16A34A', A2: '#D97706', B1: '#2563EB' };
-  const byLevel = ['A1', 'A2', 'B1'].map(lv => {
+  const lvColors = { A1: '#16A34A', A2: '#D97706' };
+  const byLevel = ['A1', 'A2'].map(lv => {
     const lvS = SENTENCES.filter(s => s.lv === lv); const lvD = lvS.filter(s => DB.learned.has(s.id)).length;
     return { lv, done: lvD, tot: lvS.length, pct: pct(lvD, lvS.length) };
   });
@@ -639,13 +739,21 @@ ${byLevel.map(l => `<div class="prog-row">
 // ACTIONS
 // ══════════════════════════════════════════════
 function toggleReveal(id) {
-  const en = document.getElementById('en-' + id), hn = document.getElementById('hn-' + id), us = document.getElementById('us-' + id), pe = document.getElementById('pe-' + id), vp = document.getElementById('vp-' + id), card = document.getElementById('sc-' + id);
+  const en = document.getElementById('en-' + id), hn = document.getElementById('hn-' + id), rd = document.getElementById('rd-' + id), card = document.getElementById('sc-' + id);
   if (!en) return;
   if (en.classList.contains('hid')) {
-    en.hidden = false; en.setAttribute('aria-hidden', 'false'); en.classList.remove('hid'); if (hn) hn.style.display = 'none'; if (us) us.style.display = 'block'; if (pe) pe.style.display = 'block'; if (vp) vp.style.display = 'block';
+    en.hidden = false;
+    en.setAttribute('aria-hidden', 'false');
+    en.classList.remove('hid');
+    if (hn) hn.style.display = 'none';
+    if (rd) rd.style.display = 'block';
     if (card) card.querySelectorAll('.reveal-btn').forEach(btn => btn.setAttribute('aria-expanded', 'true'));
   } else {
-    en.classList.add('hid'); en.hidden = true; en.setAttribute('aria-hidden', 'true'); if (hn) hn.style.display = 'block'; if (us) us.style.display = 'none'; if (pe) pe.style.display = 'none'; if (vp) vp.style.display = 'none';
+    en.classList.add('hid');
+    en.hidden = true;
+    en.setAttribute('aria-hidden', 'true');
+    if (hn) hn.style.display = 'block';
+    if (rd) rd.style.display = 'none';
     if (card) card.querySelectorAll('.reveal-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
   }
 }
@@ -699,7 +807,7 @@ function toggleUnderstood(id) {
   }
 }
 
-function setFilter(f) { V.filter = f; render(); }
+function setFilter(f) { V.filter = VALID_FILTERS.has(f) ? f : 'all'; commitState(); }
 function setQuery(q) { V.query = q; clearTimeout(window._qt); window._qt = setTimeout(render, 300); }
 function refreshQueue() { DB.dailyQueueDate = null; save(); nav('today'); }
 
@@ -1070,7 +1178,7 @@ function renderPractice() {
       <div class="practice-de" lang="de">${esc(s.de)}</div>
       <div class="practice-ph">🔊 ${esc(s.ph)}</div>
       ${P.revealed
-          ? `<div class="practice-en">${esc(s.en)}</div><div class="practice-use">💬 ${esc(s.use)}</div>${recognitionReply}${(() => { const mp = findMatchingPattern(s); return mp ? `<div style="margin-top:8px;padding:10px 12px;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:8px"><div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:4px">🧩 Pattern: ${esc(mp.template)}</div><div style="font-size:11px;color:var(--text-2);margin-bottom:6px">${esc(mp.meaning)}</div><div style="font-size:11px;color:var(--text-2)">${mp.examples.filter(e => e.de !== s.de).slice(0, 2).map(e => `<div style="padding:2px 0"><strong style="color:var(--text)" lang="de">${esc(e.de)}</strong> — ${esc(e.en)}</div>`).join('')}</div></div>` : '' })()}${renderSentenceLearnPanel(s, true, 'pgm-')}`
+          ? `<div class="practice-en">${esc(s.en)}</div><div class="practice-use">💬 ${esc(s.use)}</div>${recognitionReply}${(() => { const mp = findMatchingPattern(s); return mp ? `<div style="margin-top:8px;padding:10px 12px;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:8px"><div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:4px">🧩 Pattern: ${esc(mp.template)}</div><div style="font-size:11px;color:var(--text-2);margin-bottom:6px">${esc(mp.meaning)}</div><div style="font-size:11px;color:var(--text-2)">${mp.examples.filter(e => e.de !== s.de).slice(0, 2).map(e => `<div style="padding:2px 0"><strong style="color:var(--text)" lang="de">${esc(e.de)}</strong> — ${esc(e.en)}</div>`).join('')}</div></div>` : '' })()}${renderRevealDetails(s, true, 'pgd-')}`
           : `<button class="practice-reveal-hint" onclick="practiceReveal()" type="button">${recognitionMode ? 'Tap to reveal meaning and response' : 'Tap to reveal translation'}</button>`}
     </div>
     <div style="display:flex;justify-content:center;margin:10px 0">
@@ -1097,7 +1205,7 @@ function renderPractice() {
       ${topic ? `<div class="practice-topic-lbl">${topic.emoji} ${topic.name} - <span class="lvl-tag l${s.lv}" style="display:inline">${s.lv}</span>${gram ? ` - <span class="gram-tag" style="color:${gram.c};background:${gram.bg}">${gram.t}</span>` : ''}</div>` : ''}
       <div class="practice-de" style="font-size:19px;font-weight:700;color:var(--text);letter-spacing:-0.2px">${esc(s.en)}</div>
       ${P.revealed
-          ? `<div class="practice-ph" style="margin-bottom:4px">🔊 ${esc(s.ph)}</div><div class="practice-en" style="font-size:22px;font-weight:800;color:var(--text);margin-bottom:6px" lang="de">${esc(s.de)}</div><div class="practice-use">💬 ${esc(s.use)}</div>${(() => { const mp = findMatchingPattern(s); return mp ? `<div style="margin-top:8px;padding:10px 12px;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:8px"><div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:4px">🧩 Pattern: ${esc(mp.template)}</div><div style="font-size:11px;color:var(--text-2);margin-bottom:6px">${esc(mp.meaning)}</div><div style="font-size:11px;color:var(--text-2)">${mp.examples.filter(e => e.de !== s.de).slice(0, 2).map(e => `<div style="padding:2px 0"><strong style="color:var(--text)" lang="de">${esc(e.de)}</strong> — ${esc(e.en)}</div>`).join('')}</div></div>` : '' })()}${renderSentenceLearnPanel(s, true, 'pgm-')}`
+          ? `<div class="practice-ph" style="margin-bottom:4px">🔊 ${esc(s.ph)}</div><div class="practice-en" style="font-size:22px;font-weight:800;color:var(--text);margin-bottom:6px" lang="de">${esc(s.de)}</div><div class="practice-use">💬 ${esc(s.use)}</div>${(() => { const mp = findMatchingPattern(s); return mp ? `<div style="margin-top:8px;padding:10px 12px;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:8px"><div style="font-size:12px;font-weight:700;color:var(--purple);margin-bottom:4px">🧩 Pattern: ${esc(mp.template)}</div><div style="font-size:11px;color:var(--text-2);margin-bottom:6px">${esc(mp.meaning)}</div><div style="font-size:11px;color:var(--text-2)">${mp.examples.filter(e => e.de !== s.de).slice(0, 2).map(e => `<div style="padding:2px 0"><strong style="color:var(--text)" lang="de">${esc(e.de)}</strong> — ${esc(e.en)}</div>`).join('')}</div></div>` : '' })()}${renderRevealDetails(s, true, 'pgd-')}`
           : `<button class="practice-reveal-hint" onclick="practiceReveal()" type="button">Tap to reveal German</button>`}
     </div>
     <div style="display:flex;justify-content:center;margin:10px 0">
@@ -1124,7 +1232,7 @@ function renderPractice() {
       ${topic ? `<div class="practice-topic-lbl">${topic.emoji} ${topic.name} - <span class="lvl-tag l${s.lv}" style="display:inline">${s.lv}</span>${gram ? ` - <span class="gram-tag" style="color:${gram.c};background:${gram.bg}">${gram.t}</span>` : ''}</div>` : ''}
       <div class="practice-de" style="font-size:19px;font-weight:700;color:var(--text);letter-spacing:-0.2px">${esc(s.en)}</div>
       ${P.revealed
-          ? `${feedback}<div class="practice-ph" style="margin-bottom:4px">🔊 ${esc(s.ph)}</div><div class="practice-en" style="font-size:22px;font-weight:800;color:var(--text);margin-bottom:6px" lang="de">${esc(s.de)}</div><div class="practice-use">💬 ${esc(s.use)}</div>${renderSentenceLearnPanel(s, true, 'pgm-')}`
+          ? `${feedback}<div class="practice-ph" style="margin-bottom:4px">🔊 ${esc(s.ph)}</div><div class="practice-en" style="font-size:22px;font-weight:800;color:var(--text);margin-bottom:6px" lang="de">${esc(s.de)}</div><div class="practice-use">💬 ${esc(s.use)}</div>${renderRevealDetails(s, true, 'pgd-')}`
           : `<input id="typed-answer" class="typed-answer" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type the German sentence..." onkeydown="if(event.key==='Enter') checkTypedAnswer()" autofocus>
              <button class="practice-reveal-hint" onclick="checkTypedAnswer()" style="width:100%;margin-top:10px" type="button">Check answer</button>
              <button class="practice-skip-reveal" onclick="practiceReveal()" type="button">Reveal without typing</button>`}
@@ -1976,8 +2084,7 @@ function renderHistoryPatternRows(day) {
 function navHistoryDay(dateKey) {
   V.historyDay = normalizeDateKey(dateKey);
   V.view = V.historyDay ? 'history-day' : 'history';
-  render();
-  window.scrollTo(0, 0);
+  commitState({ scroll: true });
 }
 
 function renderHistory() {
@@ -2055,6 +2162,10 @@ function renderHistoryDay() {
     ${sents.length ? `<div class="history-section-label"><span>New learned</span><span>${sents.length} sentence${sents.length !== 1 ? 's' : ''}</span></div>${sents.map((s, i) => renderSentenceCard(s, i, true)).join('')}` : ''}`;
 }
 
+if (window.addEventListener) {
+  window.addEventListener('popstate', () => { applyUrlState(); render(); });
+}
+
 if (!window.__DD_SKIP_AUTO_INIT) {
-  load().then(() => { render(); });
+  load().then(() => { applyUrlState(); commitState({ replace: true }); });
 }
