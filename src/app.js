@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
-let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', historyDay: null };
+let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: 'a1', grammarLessonId: null, historyDay: null };
 
 // ══════════════════════════════════════════════
 // PATTERN DETECTION FOR SENTENCES
@@ -11,11 +11,25 @@ function findMatchingPattern(sentence) {
   if (explicit) return explicit;
   return null;
 }
-const VALID_VIEWS = new Set(['today', 'browse', 'patterns', 'saved', 'history', 'history-day', 'stats']);
+const VALID_VIEWS = new Set(['today', 'browse', 'vocab', 'grammar', 'patterns', 'saved', 'history', 'history-day', 'stats']);
 const VALID_FILTERS = new Set(['all', 'unlearned', 'learned', 'favorites']);
+const VALID_VOCAB_FILTERS = new Set(['all', 'new', 'due', 'learned', 'saved']);
 const VALID_PATTERN_FILTERS = new Set(['learning', 'due', 'understood', 'all']);
 const VALID_LIBRARY_TABS = new Set(['saved', 'learned']);
 const TOPIC_IDS = new Set(TOPICS.map(t => t.id));
+const VOCAB_TOPIC_IDS = new Set(VOCAB_TOPICS.map(t => t.id));
+const GRAMMAR_MODULE_IDS = new Set(GRAMMAR_MODULES.map(m => m.id));
+const GRAMMAR_LESSON_BY_ID = Object.fromEntries(GRAMMAR_LESSONS.map(lesson => [lesson.id, lesson]));
+const GRAMMAR_LESSON_IDS = new Set(GRAMMAR_LESSONS.map(lesson => lesson.id));
+const DEFAULT_GRAMMAR_MODULE_ID = GRAMMAR_MODULES[0] ? GRAMMAR_MODULES[0].id : 'a1';
+const GRAMMAR_MODULE_ALIASES = {
+  'a1.1': 'a1',
+  'a1.2': 'a1',
+  'a2.1': 'a2',
+  'a2.2': 'a2',
+  'b1.1': 'b1',
+  'b1.2': 'b1',
+};
 
 function normalizeViewName(view) {
   const raw = String(view || 'today');
@@ -27,8 +41,19 @@ function normalizePatternFilter(value) {
   if (raw === 'new') return 'learning';
   return VALID_PATTERN_FILTERS.has(raw) ? raw : 'learning';
 }
+function normalizeGrammarModuleId(value) {
+  const raw = String(value || '').toLowerCase();
+  if (GRAMMAR_MODULE_IDS.has(raw)) return raw;
+  return GRAMMAR_MODULE_ALIASES[raw] || DEFAULT_GRAMMAR_MODULE_ID;
+}
+function normalizeGrammarLessonId(moduleId, value) {
+  const module = GRAMMAR_MODULE_BY_ID[normalizeGrammarModuleId(moduleId)] || GRAMMAR_MODULES[0];
+  const lessonId = String(value || '');
+  if (GRAMMAR_LESSON_IDS.has(lessonId) && GRAMMAR_LESSON_BY_ID[lessonId].moduleId === module.id) return lessonId;
+  return module.lessons[0] ? module.lessons[0].id : null;
+}
 function stateFromUrl(href) {
-  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', historyDay: null };
+  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: DEFAULT_GRAMMAR_MODULE_ID, grammarLessonId: null, historyDay: null };
   let params;
   try {
     const base = window.location && window.location.href ? window.location.href : 'http://localhost/';
@@ -39,6 +64,8 @@ function stateFromUrl(href) {
   const viewParam = params.get('view');
   const view = normalizeViewName(viewParam || 'today');
   const topic = params.get('topic');
+  const module = params.get('module');
+  const lesson = params.get('lesson');
   const filter = params.get('filter');
   const tab = params.get('tab');
   const day = normalizeDateKey(params.get('day'));
@@ -47,6 +74,14 @@ function stateFromUrl(href) {
     fallback.view = 'browse';
     fallback.topicId = topic && TOPIC_IDS.has(topic) ? topic : null;
     fallback.filter = VALID_FILTERS.has(filter) ? filter : 'all';
+  } else if (view === 'vocab') {
+    fallback.view = 'vocab';
+    fallback.vocabTopicId = topic && VOCAB_TOPIC_IDS.has(topic) ? topic : null;
+    fallback.vocabFilter = VALID_VOCAB_FILTERS.has(filter) ? filter : 'all';
+  } else if (view === 'grammar') {
+    fallback.view = 'grammar';
+    fallback.grammarModuleId = normalizeGrammarModuleId(module);
+    fallback.grammarLessonId = normalizeGrammarLessonId(fallback.grammarModuleId, lesson);
   } else if (view === 'patterns') {
     fallback.view = 'patterns';
     fallback.patFilter = normalizePatternFilter(filter);
@@ -72,6 +107,15 @@ function urlFromState(state = V) {
   if (view === 'browse') {
     if (state.topicId && TOPIC_IDS.has(state.topicId)) params.set('topic', state.topicId);
     if (state.filter && state.filter !== 'all') params.set('filter', state.filter);
+  } else if (view === 'vocab') {
+    if (state.vocabTopicId && VOCAB_TOPIC_IDS.has(state.vocabTopicId)) params.set('topic', state.vocabTopicId);
+    if (state.vocabFilter && state.vocabFilter !== 'all') params.set('filter', state.vocabFilter);
+  } else if (view === 'grammar') {
+    const moduleId = normalizeGrammarModuleId(state.grammarModuleId);
+    if (moduleId !== DEFAULT_GRAMMAR_MODULE_ID) params.set('module', moduleId);
+    const lessonId = normalizeGrammarLessonId(moduleId, state.grammarLessonId);
+    const firstLessonId = GRAMMAR_MODULE_BY_ID[moduleId] && GRAMMAR_MODULE_BY_ID[moduleId].lessons[0] ? GRAMMAR_MODULE_BY_ID[moduleId].lessons[0].id : null;
+    if (lessonId && lessonId !== firstLessonId) params.set('lesson', lessonId);
   } else if (view === 'patterns') {
     params.set('filter', normalizePatternFilter(state.patFilter));
   } else if (view === 'saved') {
@@ -91,6 +135,10 @@ function applyUrlState(href) {
   V.query = '';
   V.libTab = next.libTab;
   V.patFilter = next.patFilter;
+  V.vocabTopicId = next.vocabTopicId;
+  V.vocabFilter = next.vocabFilter;
+  V.grammarModuleId = next.grammarModuleId;
+  V.grammarLessonId = next.grammarLessonId;
   V.historyDay = next.historyDay;
 }
 function syncUrl(replace = false) {
@@ -110,7 +158,11 @@ function nav(view, extra) {
   const nextView = normalizeViewName(view);
   V.view = nextView;
   V.topicId = nextView === 'browse' && extra && TOPIC_IDS.has(extra) ? extra : null;
+  V.vocabTopicId = nextView === 'vocab' && extra && VOCAB_TOPIC_IDS.has(extra) ? extra : null;
+  V.grammarModuleId = nextView === 'grammar' ? normalizeGrammarModuleId(extra || V.grammarModuleId) : V.grammarModuleId || DEFAULT_GRAMMAR_MODULE_ID;
+  V.grammarLessonId = nextView === 'grammar' ? normalizeGrammarLessonId(V.grammarModuleId, null) : V.grammarLessonId;
   V.filter = 'all';
+  V.vocabFilter = 'all';
   V.query = '';
   V.historyDay = null;
   if (nextView === 'patterns') V.patFilter = 'learning';
@@ -148,12 +200,14 @@ function render() {
   if (V.view === 'today') root.innerHTML = renderToday();
   else if (V.view === 'browse' && V.topicId) root.innerHTML = renderTopic();
   else if (V.view === 'browse') root.innerHTML = renderBrowse();
+  else if (V.view === 'vocab') root.innerHTML = renderVocab();
+  else if (V.view === 'grammar') root.innerHTML = renderGrammar();
   else if (V.view === 'patterns') root.innerHTML = renderPatterns();
   else if (V.view === 'saved') root.innerHTML = renderSaved();
   else if (V.view === 'history') root.innerHTML = renderHistory();
   else if (V.view === 'history-day') root.innerHTML = renderHistoryDay();
   else if (V.view === 'stats') { root.innerHTML = renderStats(); }
-  root.querySelectorAll('.sc,.pc').forEach((el, i) => el.style.animationDelay = i * 25 + 'ms');
+  root.querySelectorAll('.sc,.pc,.vc,.grammar-card').forEach((el, i) => el.style.animationDelay = i * 25 + 'ms');
 }
 
 function updateHeader() {
@@ -163,7 +217,7 @@ function updateHeader() {
   document.getElementById('stk-n').textContent = DB.streak;
 }
 function updateNavBtns() {
-  ['today', 'browse', 'patterns', 'stats'].forEach(v => {
+  ['today', 'browse', 'vocab', 'grammar', 'patterns', 'stats'].forEach(v => {
     const el = document.getElementById('nb-' + v);
     if (el) el.className = 'nb' + (V.view === v ? ' on' : '');
     const mel = document.getElementById('mnb-' + v);
@@ -284,6 +338,453 @@ ${practiceTopicBtn}
 	<div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
 
 ${cards}`;
+}
+
+// ─── VOCAB ───────────────────────────────────
+function vocabTopicById(id) {
+  return VOCAB_TOPICS.find(topic => topic.id === id) || null;
+}
+function vocabDisplay(card) {
+  return card && card.article ? `${card.article} ${card.de}` : (card ? card.de : '');
+}
+function vocabSpeakText(card) {
+  return vocabDisplay(card);
+}
+function vocabMetaLabel(card) {
+  if (!card) return '';
+  if (card.pos === 'noun') return `${card.article} · ${card.gender}${card.plural ? ` · plural: ${card.plural}` : ''}`;
+  return VOCAB_POS_LABELS[card.pos] || card.pos;
+}
+function vocabCardsForView() {
+  const due = new Set(getVocabReviewIds());
+  const q = V.query.trim().toLowerCase();
+  return VOCAB_CARDS.filter(card => {
+    if (V.vocabTopicId && card.topic !== V.vocabTopicId) return false;
+    if (V.vocabFilter === 'new' && DB.vocabLearned.has(card.id)) return false;
+    if (V.vocabFilter === 'due' && !due.has(card.id)) return false;
+    if (V.vocabFilter === 'learned' && !DB.vocabLearned.has(card.id)) return false;
+    if (V.vocabFilter === 'saved' && !DB.vocabFavorites.has(card.id)) return false;
+    if (!q) return true;
+    const topic = vocabTopicById(card.topic);
+    return [vocabDisplay(card), card.de, card.en, card.pos, card.article, card.gender, card.plural, topic && topic.name, topic && topic.german]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(q));
+  }).sort((a, b) => a.priority - b.priority);
+}
+function renderVocab() {
+  ensureVocabDailyQueue();
+  const dueIds = getVocabReviewIds();
+  const dueCards = dueIds.map(id => VOCAB_BY_ID[id]).filter(Boolean);
+  const queueCards = DB.vocabDailyQueue.map(id => VOCAB_BY_ID[id]).filter(Boolean);
+  const queueDone = queueCards.filter(card => DB.vocabDailyQueueDone.has(card.id) || (DB.vocabSrs[card.id] && DB.vocabSrs[card.id].lastReview === today())).length;
+  const learned = DB.vocabLearned.size;
+  const saved = DB.vocabFavorites.size;
+  const remaining = VOCAB_CARDS.length - learned;
+  const queuePct = queueCards.length ? Math.min(100, Math.round(queueDone / queueCards.length * 100)) : 0;
+  const visibleCards = vocabCardsForView();
+  const visibleIds = visibleCards.map(card => card.id);
+  const queueIds = queueCards.map(card => card.id);
+  const dueIdsJson = idsArg(dueIds);
+  const queueIdsJson = idsArg(queueIds);
+  const visibleIdsJson = idsArg(visibleIds);
+  const selectedTopic = vocabTopicById(V.vocabTopicId);
+  const dueSection = dueCards.length ? `<div class="review-section vocab-review-section">
+  <div class="review-section-hdr">
+    <div class="review-section-title">🔁 Due Vocab Review <span class="review-count-badge">${dueCards.length}</span></div>
+    <button class="review-practice-btn" onclick="startVocabPractice({ids:${dueIdsJson},isSRS:true})">Practice Now</button>
+  </div>
+  <div class="review-section-sub">These vocabulary cards are scheduled for spaced review today.</div>
+</div>` : '';
+  const goalOptions = [5, 10, 15, 20, 25, 30].map(n => `<button class="vocab-goal-opt${DB.vocabDailyGoal === n ? ' on' : ''}" onclick="setVocabGoal(${n})" aria-pressed="${DB.vocabDailyGoal === n}" type="button">${n}</button>`).join('');
+  const topicChips = [`<button class="filter-chip${!V.vocabTopicId ? ' on' : ''}" onclick="setVocabTopic(null)" aria-pressed="${!V.vocabTopicId}" type="button">All topics</button>`]
+    .concat(VOCAB_TOPICS.map(topic => `<button class="filter-chip${V.vocabTopicId === topic.id ? ' on' : ''}" onclick="setVocabTopic('${topic.id}')" aria-pressed="${V.vocabTopicId === topic.id}" type="button">${topic.emoji} ${topic.name}</button>`))
+    .join('');
+  const cardsTitle = V.query
+    ? `Search Results (${visibleCards.length})`
+    : selectedTopic
+    ? `${selectedTopic.emoji} ${selectedTopic.name} (${visibleCards.length})`
+    : V.vocabFilter === 'all'
+    ? `All Vocab Cards (${visibleCards.length})`
+    : `${V.vocabFilter.charAt(0).toUpperCase() + V.vocabFilter.slice(1)} Cards (${visibleCards.length})`;
+
+  return `<div style="padding-top:14px">
+<h2 class="page-title">Vocab</h2>
+<p class="page-sub">500 curated daily-life German cards with article, gender, plural, example, and SRS review.</p>
+${dueSection}
+
+<div class="goal-card vocab-goal-card">
+  <div class="goal-top">
+    <div><div class="goal-title">🗂️ Today's Vocab Queue</div><div class="goal-date">${queueCards.length} card${queueCards.length !== 1 ? 's' : ''} ready</div></div>
+    <button class="goal-btn" onclick="refreshVocabQueue()" type="button">New batch</button>
+  </div>
+  <div class="goal-nums">
+    <div><div class="gnum-v" style="color:var(--green)">${queueDone}</div><div class="gnum-l">Queue done</div></div>
+    <div><div class="gnum-v" style="color:var(--amber)">${dueIds.length}</div><div class="gnum-l">Due</div></div>
+    <div><div class="gnum-v" style="color:var(--accent)">${learned}</div><div class="gnum-l">Learned</div></div>
+    <div><div class="gnum-v" style="color:var(--pink)">${saved}</div><div class="gnum-l">Saved</div></div>
+    <div><div class="gnum-v" style="color:var(--text-3)">${remaining}</div><div class="gnum-l">Remaining</div></div>
+  </div>
+  <div class="goal-bar-bg"><div class="goal-bar-fill" style="width:${queuePct}%"></div></div>
+  <div class="vocab-goal-row">
+    <span>Daily vocab goal</span>
+    <div class="vocab-goal-options">${goalOptions}</div>
+  </div>
+</div>
+
+<div class="vocab-action-row">
+  ${queueCards.length ? `<button class="learned-practice-btn" onclick="startVocabPractice({ids:${queueIdsJson}})">🎯 Practice Today's ${queueCards.length}</button>` : ''}
+  ${dueCards.length ? `<button class="review-practice-btn" onclick="startVocabPractice({ids:${dueIdsJson},isSRS:true})">🔁 Practice Due ${dueCards.length}</button>` : ''}
+  ${visibleCards.length ? `<button class="act-btn vocab-visible-practice" onclick="startVocabPractice({ids:${visibleIdsJson},skipSessionFilter:true})">Practice Visible</button>` : ''}
+</div>
+
+${queueCards.length ? `<div class="sec-lbl">Today's New / Due Queue</div>${queueCards.map((card, i) => renderVocabCard(card, i)).join('')}` : ''}
+
+<div class="search-wrap" style="margin:16px 0"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search vocab, English meaning, topic, article, plural..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
+<div class="filter-row vocab-topic-row">${topicChips}</div>
+<div class="filter-row">
+  ${['all', 'new', 'due', 'learned', 'saved'].map(f => `<button class="filter-chip${V.vocabFilter === f ? ' on' : ''}" onclick="setVocabFilter('${f}')" aria-pressed="${V.vocabFilter === f}" type="button">${f === 'all' ? 'All' : f === 'new' ? 'New' : f === 'due' ? 'Due' : f === 'learned' ? '✓ Learned' : '⭐ Saved'}</button>`).join('')}
+</div>
+<div class="sec-lbl">${cardsTitle}</div>
+${visibleCards.length ? visibleCards.map((card, i) => renderVocabCard(card, i)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No vocab cards match.</div>`}
+  </div>`;
+}
+function renderVocabCard(card, i) {
+  const topic = vocabTopicById(card.topic);
+  const learned = DB.vocabLearned.has(card.id);
+  const saved = DB.vocabFavorites.has(card.id);
+  const nextLabel = vocabSrsNextLabel(card.id);
+  const srsLvl = getVocabSrsLevel(card.id);
+  const srsDots = learned ? `<span class="srs-dots" title="${esc(nextLabel)}">${SRS_INTERVALS.map((_, dot) => `<span class="srs-dot${dot < srsLvl ? ' filled' : ''}"></span>`).join('')}</span>${nextLabel ? `<span class="srs-next">${esc(nextLabel)}</span>` : ''}` : '';
+  const gender = card.pos === 'noun' ? `<span class="vocab-gender g-${card.gender}">${card.article} · ${card.gender}</span>` : `<span class="vocab-gender">${esc(VOCAB_POS_LABELS[card.pos] || card.pos)}</span>`;
+  return `<div class="vc${learned ? ' lrn' : ''}${saved ? ' fav' : ''}" id="vc-${card.id}">
+<div class="sc-top">
+  ${topic ? `<span class="topic-label">${topic.emoji} ${topic.name}</span>` : ''}
+  <span class="lvl-tag l${card.level}">${card.level}</span>
+  ${gender}
+  ${learned ? `<span class="lrn-badge">✓ Learned</span>${srsDots}` : ''}
+</div>
+<button class="vocab-term reveal-btn" onclick="toggleVocabReveal('${card.id}')" aria-expanded="false" type="button" lang="de">${esc(vocabDisplay(card))}</button>
+<div class="vocab-meta">${esc(vocabMetaLabel(card))}</div>
+<div class="reveal-hint" id="vhn-${card.id}">👆 Tap to reveal meaning and example</div>
+<button class="vocab-en hid reveal-btn" id="ven-${card.id}" onclick="toggleVocabReveal('${card.id}')" aria-hidden="true" hidden type="button">${esc(card.en)}</button>
+<div class="vocab-details" id="vrd-${card.id}" style="display:none">
+  ${card.plural ? `<div class="vocab-detail-row"><strong>Plural</strong><span lang="de">${esc(card.plural)}</span></div>` : ''}
+  <div class="vocab-example"><strong>Example</strong><span lang="de">${esc(card.example.de)}</span><em>${esc(card.example.en)}</em></div>
+</div>
+<div class="card-actions">
+  <button class="act-btn speak-btn" data-id="vocab-${card.id}" onclick="speak(${jsArg(vocabSpeakText(card))},'vocab-${card.id}')" type="button">
+    ${ICO.speak} Listen
+  </button>
+  <button class="act-btn${learned ? ' is-learned' : ''}" id="vlrn-btn-${card.id}" onclick="toggleVocabLearned('${card.id}')">
+    ${ICO.check} ${learned ? 'Learned' : 'Mark learned'}
+  </button>
+  <button class="act-btn${saved ? ' is-fav' : ''}" id="vfav-btn-${card.id}" onclick="toggleVocabFav('${card.id}')">
+    ${ICO.star} ${saved ? 'Saved' : 'Save'}
+  </button>
+  <button class="act-btn" onclick="startVocabPractice({ids:['${card.id}'],skipSessionFilter:true})">Practice</button>
+</div>
+  </div>`;
+}
+
+// ─── GRAMMAR ─────────────────────────────────
+let GQ = { lessonId: null, questions: [], index: 0, selected: null, correct: 0, complete: false };
+
+function grammarSearchText(lesson, module) {
+  return [
+    module.level,
+    lesson.title, lesson.focus, lesson.explanation, lesson.tip,
+    ...(lesson.rules || []),
+    ...(lesson.mistakes || []),
+    ...(lesson.practice || []),
+    ...(lesson.examples || []).flatMap(example => [example.de, example.en]),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function grammarScorePercent(lessonId) {
+  const score = DB.grammarScores[lessonId];
+  return score && score.total ? Math.round(score.correct / score.total * 100) : 0;
+}
+
+function grammarLessonStatus(lessonId) {
+  const score = DB.grammarScores[lessonId];
+  if (score && score.total && score.correct / score.total >= 0.8) return 'mastered';
+  if (DB.grammarStudied.has(lessonId)) return 'studied';
+  if (score && score.total) return 'practicing';
+  return 'new';
+}
+
+function grammarStatusLabel(status) {
+  return status === 'mastered' ? 'Mastered' : status === 'studied' ? 'Studied' : status === 'practicing' ? 'Practicing' : 'New';
+}
+
+function grammarModuleStats(module) {
+  const studied = module.lessons.filter(lesson => DB.grammarStudied.has(lesson.id)).length;
+  const mastered = module.lessons.filter(lesson => grammarLessonStatus(lesson.id) === 'mastered').length;
+  return {
+    studied,
+    mastered,
+    total: module.lessons.length,
+    percent: module.lessons.length ? Math.round(studied / module.lessons.length * 100) : 0,
+  };
+}
+
+function setGrammarModule(moduleId) {
+  V.grammarModuleId = normalizeGrammarModuleId(moduleId);
+  V.grammarLessonId = normalizeGrammarLessonId(V.grammarModuleId, null);
+  V.query = '';
+  GQ = { lessonId: null, questions: [], index: 0, selected: null, correct: 0, complete: false };
+  commitState({ scroll: true });
+}
+
+function setGrammarLesson(lessonId) {
+  const lesson = GRAMMAR_LESSON_BY_ID[lessonId];
+  if (!lesson) return;
+  V.grammarModuleId = lesson.moduleId;
+  V.grammarLessonId = lesson.id;
+  V.query = '';
+  GQ = { lessonId: null, questions: [], index: 0, selected: null, correct: 0, complete: false };
+  commitState();
+  setTimeout(() => {
+    const detail = document.getElementById('grammar-lesson-detail');
+    if (detail && typeof detail.scrollIntoView === 'function') detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 0);
+}
+
+function toggleGrammarStudied(lessonId) {
+  setGrammarStudied(lessonId, !DB.grammarStudied.has(lessonId));
+  render();
+}
+
+function grammarExerciseOptions(correct, pool, offset) {
+  const distractors = [...new Set(pool.filter(value => value && value !== correct))];
+  const chosen = [];
+  for (let i = 0; i < distractors.length && chosen.length < 3; i++) {
+    chosen.push(distractors[(i + offset) % distractors.length]);
+  }
+  const options = [correct, ...chosen];
+  const rotation = options.length ? offset % options.length : 0;
+  return [...options.slice(rotation), ...options.slice(0, rotation)];
+}
+
+function grammarExercisesForLesson(lesson) {
+  const module = GRAMMAR_MODULE_BY_ID[lesson.moduleId];
+  const moduleExamples = module.lessons.flatMap(item => item.examples || []);
+  return (lesson.examples || []).flatMap((example, index) => [
+    {
+      prompt: `Choose the German sentence for: ${example.en}`,
+      options: grammarExerciseOptions(example.de, moduleExamples.map(item => item.de), index + 1),
+      answer: example.de,
+    },
+    {
+      prompt: `Choose the meaning of: ${example.de}`,
+      options: grammarExerciseOptions(example.en, moduleExamples.map(item => item.en), index + 2),
+      answer: example.en,
+    },
+  ]);
+}
+
+function startGrammarExercises(lessonId) {
+  const lesson = GRAMMAR_LESSON_BY_ID[lessonId];
+  if (!lesson) return;
+  GQ = { lessonId, questions: grammarExercisesForLesson(lesson), index: 0, selected: null, correct: 0, complete: false };
+  render();
+  setTimeout(() => {
+    const panel = document.getElementById('grammar-exercise-panel');
+    if (panel && typeof panel.scrollIntoView === 'function') panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 0);
+}
+
+function answerGrammarExercise(optionIndex) {
+  if (GQ.complete || GQ.selected !== null) return;
+  const question = GQ.questions[GQ.index];
+  if (!question || optionIndex < 0 || optionIndex >= question.options.length) return;
+  GQ.selected = optionIndex;
+  if (question.options[optionIndex] === question.answer) GQ.correct++;
+  render();
+}
+
+function nextGrammarExercise() {
+  if (GQ.selected === null || GQ.complete) return;
+  if (GQ.index >= GQ.questions.length - 1) {
+    GQ.complete = true;
+    recordGrammarScore(GQ.lessonId, GQ.correct, GQ.questions.length);
+  } else {
+    GQ.index++;
+    GQ.selected = null;
+  }
+  render();
+}
+
+function renderGrammarIndexItem(lesson, module, index, selected) {
+  const status = grammarLessonStatus(lesson.id);
+  const score = grammarScorePercent(lesson.id);
+  return `<button class="grammar-index-item${selected ? ' on' : ''}" onclick="setGrammarLesson('${lesson.id}')" type="button">
+  <span class="grammar-index-number">${String(index + 1).padStart(2, '0')}</span>
+  <span class="grammar-index-copy">
+    <strong>${esc(lesson.title)}</strong>
+    <span>${esc(lesson.focus)}</span>
+  </span>
+  <span class="grammar-index-status ${status}">${status === 'mastered' ? `${score}%` : grammarStatusLabel(status)}</span>
+</button>`;
+}
+
+function renderGrammarExercisePanel(lesson) {
+  const score = DB.grammarScores[lesson.id];
+  const questionCount = (lesson.examples || []).length * 2;
+  if (GQ.lessonId !== lesson.id) {
+    return `<section class="grammar-exercise-panel" id="grammar-exercise-panel">
+  <div>
+    <div class="grammar-box-title">Quick check</div>
+    <h3>${questionCount} generated questions</h3>
+    <p>Check both German production and meaning recall for this topic.</p>
+  </div>
+  <div class="grammar-exercise-actions">
+    ${score ? `<span class="grammar-best-score">Best ${grammarScorePercent(lesson.id)}%</span>` : ''}
+    <button class="grammar-primary-btn" onclick="startGrammarExercises('${lesson.id}')" type="button">${score ? 'Practice again' : 'Start exercises'}</button>
+  </div>
+</section>`;
+  }
+  if (GQ.complete) {
+    const percent = GQ.questions.length ? Math.round(GQ.correct / GQ.questions.length * 100) : 0;
+    return `<section class="grammar-exercise-panel complete" id="grammar-exercise-panel">
+  <div>
+    <div class="grammar-box-title">Quick check complete</div>
+    <h3>${GQ.correct} / ${GQ.questions.length} correct</h3>
+    <p>${percent >= 80 ? 'This topic is now marked mastered.' : 'Review the rules and examples, then try once more.'}</p>
+  </div>
+  <div class="grammar-exercise-actions">
+    <span class="grammar-best-score">${percent}%</span>
+    <button class="grammar-primary-btn" onclick="startGrammarExercises('${lesson.id}')" type="button">Practice again</button>
+  </div>
+</section>`;
+  }
+  const question = GQ.questions[GQ.index];
+  const answered = GQ.selected !== null;
+  return `<section class="grammar-exercise-panel active" id="grammar-exercise-panel">
+  <div class="grammar-quiz-progress">
+    <span>Question ${GQ.index + 1} of ${GQ.questions.length}</span>
+    <strong>${GQ.correct} correct</strong>
+  </div>
+  <div class="grammar-quiz-bar"><span style="width:${Math.round((GQ.index + (answered ? 1 : 0)) / GQ.questions.length * 100)}%"></span></div>
+  <h3 class="grammar-quiz-prompt">${esc(question.prompt)}</h3>
+  <div class="grammar-quiz-options">
+    ${question.options.map((option, index) => {
+      const isCorrect = option === question.answer;
+      const isSelected = GQ.selected === index;
+      const state = answered ? isCorrect ? ' correct' : isSelected ? ' wrong' : ' muted' : '';
+      return `<button class="grammar-quiz-option${state}" onclick="answerGrammarExercise(${index})" ${answered ? 'disabled' : ''} type="button">${esc(option)}</button>`;
+    }).join('')}
+  </div>
+  ${answered ? `<div class="grammar-quiz-feedback ${question.options[GQ.selected] === question.answer ? 'correct' : 'wrong'}">
+    ${question.options[GQ.selected] === question.answer ? 'Correct.' : `Correct answer: ${esc(question.answer)}`}
+  </div>
+  <button class="grammar-primary-btn grammar-next-question" onclick="nextGrammarExercise()" type="button">${GQ.index >= GQ.questions.length - 1 ? 'Finish' : 'Next question'}</button>` : ''}
+</section>`;
+}
+
+function renderGrammar() {
+  const selected = GRAMMAR_MODULE_BY_ID[V.grammarModuleId] || GRAMMAR_MODULES[0];
+  const selectedLessonId = normalizeGrammarLessonId(selected.id, V.grammarLessonId);
+  V.grammarLessonId = selectedLessonId;
+  const selectedLesson = GRAMMAR_LESSON_BY_ID[selectedLessonId];
+  const q = V.query.trim().toLowerCase();
+  const rows = q
+    ? GRAMMAR_LESSONS
+      .map(lesson => ({ lesson, module: GRAMMAR_MODULE_BY_ID[lesson.moduleId] }))
+      .filter(row => row.module && grammarSearchText(row.lesson, row.module).includes(q))
+    : selected.lessons.map(lesson => ({ lesson, module: selected }));
+  const moduleCards = GRAMMAR_MODULES.map(module => {
+    const stats = grammarModuleStats(module);
+    const on = module.id === selected.id && !q;
+    return `<button class="grammar-module-chip${on ? ' on' : ''}" onclick="setGrammarModule('${module.id}')" aria-pressed="${on}" type="button">
+  <span class="grammar-module-chip-top"><strong>${esc(module.level)}</strong><em>${stats.studied}/${stats.total}</em></span>
+  <span>${esc(module.title)}</span>
+  <span class="grammar-module-progress"><i style="width:${stats.percent}%"></i></span>
+</button>`;
+  }).join('');
+  const selectedStats = grammarModuleStats(selected);
+  return `<div style="padding-top:14px">
+<div class="grammar-page-heading">
+  <div>
+    <h2 class="page-title">Grammar</h2>
+    <p class="page-sub">Complete A1-B1 curriculum with focused lessons, progress tracking, and exercises.</p>
+  </div>
+  <div class="grammar-total-progress">
+    <strong>${DB.grammarStudied.size}/${GRAMMAR_LESSONS.length}</strong>
+    <span>topics studied</span>
+  </div>
+</div>
+
+<div class="grammar-module-row">${moduleCards}</div>
+
+<section class="grammar-index-panel">
+  <div class="grammar-index-head">
+    <div>
+      <div class="grammar-hero-label">${q ? 'Search results' : `${esc(selected.level)} curriculum index`}</div>
+      <h3>${q ? `${rows.length} matching topics` : `${selected.lessons.length} topics · ${selectedStats.mastered} mastered`}</h3>
+      ${q ? '' : `<p>${esc(selected.subtitle)}</p>`}
+    </div>
+    ${q ? '' : `<div class="grammar-level-progress"><strong>${selectedStats.percent}%</strong><span>studied</span></div>`}
+  </div>
+  <div class="search-wrap grammar-search"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search all grammar topics..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
+  <div class="grammar-index-list">
+    ${rows.length ? rows.map((row, index) => renderGrammarIndexItem(row.lesson, row.module, index, !q && row.lesson.id === selectedLessonId)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No grammar topic matches.</div>`}
+  </div>
+</section>
+
+${q ? '' : renderGrammarLesson(selectedLesson, selected)}
+  </div>`;
+}
+
+function renderGrammarLesson(lesson, module) {
+  const examples = (lesson.examples || []).map((example, i) => `<div class="grammar-example">
+  <button class="pat-ex-speak" onclick="event.stopPropagation();speak(${jsArg(example.de)},'gr-${lesson.id}-${i}')" title="Listen" type="button">🔊</button>
+  <div><strong lang="de">${esc(example.de)}</strong><span>${esc(example.en)}</span></div>
+</div>`).join('');
+  const lessonIndex = module.lessons.findIndex(item => item.id === lesson.id);
+  const previous = module.lessons[lessonIndex - 1];
+  const next = module.lessons[lessonIndex + 1];
+  const status = grammarLessonStatus(lesson.id);
+  return `<section class="grammar-lesson-detail" id="grammar-lesson-detail">
+<div class="grammar-card-top">
+  <div>
+    <div class="grammar-level-tag">${esc(module.level)} · Topic ${lessonIndex + 1} of ${module.lessons.length}</div>
+    <h2>${esc(lesson.title)}</h2>
+    <span class="grammar-focus">${esc(lesson.focus)}</span>
+  </div>
+  <button class="grammar-study-btn ${DB.grammarStudied.has(lesson.id) ? 'done' : ''}" onclick="toggleGrammarStudied('${lesson.id}')" type="button">
+    ${DB.grammarStudied.has(lesson.id) ? `${ICO.check} Studied` : 'Mark studied'}
+  </button>
+</div>
+<p class="grammar-explanation">${esc(lesson.explanation)}</p>
+<div class="grammar-grid">
+  <div class="grammar-box">
+    <div class="grammar-box-title">Rules</div>
+    ${(lesson.rules || []).map(rule => `<div class="grammar-rule">${esc(rule)}</div>`).join('')}
+  </div>
+  <div class="grammar-box">
+    <div class="grammar-box-title">Examples</div>
+    ${examples}
+  </div>
+</div>
+<div class="grammar-note"><strong>Remember</strong><span>${esc(lesson.tip)}</span></div>
+<div class="grammar-grid">
+  <div class="grammar-box warn">
+    <div class="grammar-box-title">Common mistakes</div>
+    ${(lesson.mistakes || []).map(item => `<div class="grammar-rule">${esc(item)}</div>`).join('')}
+  </div>
+  <div class="grammar-box practice">
+    <div class="grammar-box-title">Practice</div>
+    ${(lesson.practice || []).map(item => `<div class="grammar-rule">${esc(item)}</div>`).join('')}
+  </div>
+</div>
+${renderGrammarExercisePanel(lesson)}
+<div class="grammar-lesson-nav">
+  ${previous ? `<button onclick="setGrammarLesson('${previous.id}')" type="button"><span>Previous</span><strong>${esc(previous.title)}</strong></button>` : '<span></span>'}
+  ${next ? `<button class="next" onclick="setGrammarLesson('${next.id}')" type="button"><span>Next</span><strong>${esc(next.title)}</strong></button>` : '<span></span>'}
+</div>
+<div class="grammar-status-line">Status: <strong>${grammarStatusLabel(status)}</strong>${DB.grammarScores[lesson.id] ? ` · Best exercise score: ${grammarScorePercent(lesson.id)}%` : ''}</div>
+  </section>`;
 }
 
 function esc(v) {
@@ -875,16 +1376,20 @@ function renderStats() {
   const histRows = [];
   for (let i = 6; i >= 0; i--) {
     const key = addDaysISO(-i);
-    const cnt = DB.attempts.filter(a => a.date === key && a.result !== 'skip').length + DB.patternAttempts.filter(a => a.date === key && a.result !== 'skip').length;
+    const cnt = DB.attempts.filter(a => a.date === key && a.result !== 'skip').length
+      + DB.patternAttempts.filter(a => a.date === key && a.result !== 'skip').length
+      + DB.vocabAttempts.filter(a => a.date === key).length;
     const d = parseDateKey(key);
     const label = i === 0 ? 'Today' : i === 1 ? 'Yest' : d.toLocaleDateString('en-DE', { weekday: 'short' });
     histRows.push({ label, cnt, isToday: i === 0 });
   }
   const maxH = Math.max(...histRows.map(r => r.cnt), 1);
-  const studiedDates = new Set([...DB.attempts, ...DB.patternAttempts].filter(a => a.result !== 'skip').map(a => a.date));
+  const studiedDates = new Set([...DB.attempts, ...DB.patternAttempts, ...DB.vocabAttempts].filter(a => a.result !== 'skip').map(a => a.date));
   Object.keys(DB.historyWords).forEach(k => studiedDates.add(k));
   const reviewDue = getSrsReviewIds().length;
   const patternDue = getPatternReviewIds().length;
+  const vocabDue = getVocabReviewIds().length;
+  const vocabDone = DB.vocabLearned.size;
   const overdue = Object.values(DB.srs).filter(s => s.nextReview && s.nextReview < today()).length;
   const srsTotal = Object.keys(DB.srs).length;
   const srsLvl5plus = Object.entries(DB.srs).filter(([id, v]) => DB.learned.has(id) && v.level >= 5).length;
@@ -934,6 +1439,7 @@ ${histRows.map(r => {
   <div class="stat-box"><div class="stat-lbl">New Today</div><div class="stat-num" style="color:var(--green)">${newToday}</div><div class="stat-sub">sentences learned</div></div>
   <div class="stat-box"><div class="stat-lbl">Reviews Today</div><div class="stat-num" style="color:var(--amber)">${reviewsToday}</div><div class="stat-sub">due cards answered</div></div>
   <div class="stat-box"><div class="stat-lbl">Patterns</div><div class="stat-num" style="color:var(--purple)">${und}</div><div class="stat-sub">${patternDue} due</div></div>
+  <div class="stat-box"><div class="stat-lbl">Vocab</div><div class="stat-num" style="color:var(--blue)">${vocabDone}</div><div class="stat-sub">${vocabDue} due of ${VOCAB_CARDS.length}</div></div>
 </div>
 
 <div class="stats-sec-hdr">🔁 Spaced Repetition</div>
@@ -1038,6 +1544,41 @@ function toggleFav(id) {
   }
 }
 
+function toggleVocabReveal(id) {
+  const en = document.getElementById('ven-' + id);
+  const hint = document.getElementById('vhn-' + id);
+  const details = document.getElementById('vrd-' + id);
+  const card = document.getElementById('vc-' + id);
+  if (!en) return;
+  if (en.classList.contains('hid')) {
+    en.hidden = false;
+    en.setAttribute('aria-hidden', 'false');
+    en.classList.remove('hid');
+    if (hint) hint.style.display = 'none';
+    if (details) details.style.display = 'block';
+    if (card) card.querySelectorAll('.reveal-btn').forEach(btn => btn.setAttribute('aria-expanded', 'true'));
+  } else {
+    en.classList.add('hid');
+    en.hidden = true;
+    en.setAttribute('aria-hidden', 'true');
+    if (hint) hint.style.display = 'block';
+    if (details) details.style.display = 'none';
+    if (card) card.querySelectorAll('.reveal-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+  }
+}
+
+function toggleVocabLearned(id) {
+  if (DB.vocabLearned.has(id)) unmarkVocabLearned(id);
+  else markVocabLearned(id, 'manual');
+  render();
+}
+
+function toggleVocabFav(id) {
+  DB.vocabFavorites.has(id) ? DB.vocabFavorites.delete(id) : DB.vocabFavorites.add(id);
+  save();
+  render();
+}
+
 function toggleUnderstood(id) {
   if (DB.understood.has(id)) {
     DB.understood.delete(id);
@@ -1058,8 +1599,20 @@ function toggleUnderstood(id) {
 }
 
 function setFilter(f) { V.filter = VALID_FILTERS.has(f) ? f : 'all'; commitState(); }
+function setVocabFilter(f) { V.vocabFilter = VALID_VOCAB_FILTERS.has(f) ? f : 'all'; commitState(); }
+function setVocabTopic(topicId) {
+  V.vocabTopicId = topicId && VOCAB_TOPIC_IDS.has(topicId) ? topicId : null;
+  commitState();
+}
+function setVocabGoal(n) {
+  DB.vocabDailyGoal = clampNumber(n, 1, 50, DEFAULT_VOCAB_DAILY_GOAL);
+  DB.vocabDailyQueueDate = null;
+  save();
+  commitState();
+}
 function setQuery(q) { V.query = q; clearTimeout(window._qt); window._qt = setTimeout(render, 300); }
 function refreshQueue() { DB.dailyQueueDate = null; save(); nav('today'); }
+function refreshVocabQueue() { DB.vocabDailyQueueDate = null; save(); nav('vocab'); }
 
 // ─── TTS ─────────────────────────────────────
 // ── TTS Engine ──────────────────────────────────────────────────────────────
@@ -1274,6 +1827,7 @@ function setGoal(n) {
 // ==============================
 let P = { active: false, queue: [], idx: 0, revealed: false, got: 0, again: 0, skipped: 0, isSRS: false, dir: 'de2en', dirChoice: true, answered: {}, missedIds: [], typedFeedback: null };
 let PP = { active: false, queue: [], idx: 0, revealed: false, got: 0, again: 0, skipped: 0, answered: {} };
+let VP = { active: false, queue: [], idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS: false, dir: 'de2en', dirChoice: true, answered: {}, missedIds: [] };
 
 function startPractice(opts) {
   const ids = Array.isArray(opts) ? opts : opts.ids;
@@ -1682,7 +2236,225 @@ function practicePrev() {
   if (P.idx > 0) { P.idx--; P.revealed = false; P.typedFeedback = null; renderPractice(); }
 }
 
-function closePractice() { P.active = false; PP.active = false; const ov = document.getElementById('practice-overlay'); if (ov) ov.remove(); render(); }
+function closePractice() { P.active = false; PP.active = false; VP.active = false; const ov = document.getElementById('practice-overlay'); if (ov) ov.remove(); render(); }
+
+// ==============================
+// VOCAB PRACTICE MODE
+// ==============================
+function startVocabPractice(opts) {
+  const ids = Array.isArray(opts) ? opts : opts.ids;
+  const isSRS = Array.isArray(opts) ? false : Boolean(opts.isSRS);
+  const requestedDir = Array.isArray(opts) ? '' : String(opts.dir || '');
+  const dir = ['de2en', 'en2de'].includes(requestedDir) ? requestedDir : 'de2en';
+  const cards = ids.map(id => VOCAB_BY_ID[id]).filter(Boolean);
+  if (!cards.length) return;
+  P.active = false;
+  PP.active = false;
+  VP = { active: true, queue: shuffle([...cards]), idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS, dir, dirChoice: !requestedDir, answered: {}, missedIds: [] };
+  renderVocabPractice();
+}
+
+function setVocabPracticeDir(dir) {
+  VP.dir = ['de2en', 'en2de'].includes(dir) ? dir : 'de2en';
+  VP.dirChoice = false;
+  renderVocabPractice();
+}
+
+function renderVocabPractice() {
+  const existing = document.getElementById('practice-overlay');
+  if (existing) existing.remove();
+  if (!VP.active) return;
+
+  const ov = document.createElement('div');
+  ov.id = 'practice-overlay';
+  ov.className = 'practice-overlay';
+
+  if (VP.dirChoice) {
+    const total = VP.queue.length;
+    ov.innerHTML = `
+  <div class="practice-hdr">
+    <button class="practice-exit" onclick="closePractice()">Exit</button>
+    <div style="font-size:15px;font-weight:700;color:var(--text)">${total} vocab card${total !== 1 ? 's' : ''} ready</div>
+    <div style="width:44px"></div>
+  </div>
+  <div class="practice-body">
+    <div class="dir-choice-wrap">
+      <div class="dir-choice-title">Choose Vocab Direction</div>
+      <div class="dir-choice-sub">Pick which side appears first.</div>
+      <button class="dir-btn primary" onclick="setVocabPracticeDir('de2en')">
+        <span class="dir-btn-icon">🇩🇪</span>
+        <div>
+          <div class="dir-btn-title">German → English</div>
+          <div class="dir-btn-sub">See the German word, recall the meaning</div>
+        </div>
+      </button>
+      <button class="dir-btn" onclick="setVocabPracticeDir('en2de')">
+        <span class="dir-btn-icon">🇬🇧</span>
+        <div>
+          <div class="dir-btn-title" style="color:var(--text)">English → German</div>
+          <div class="dir-btn-sub" style="color:var(--text-3)">See the meaning, recall the German word and article</div>
+        </div>
+      </button>
+    </div>
+  </div>`;
+    document.body.appendChild(ov);
+    return;
+  }
+
+  if (VP.idx >= VP.queue.length) {
+    const total = VP.queue.length;
+    const answeredCount = Object.keys(VP.answered).filter(key => VP.answered[key] !== 'skip').length;
+    const strong = VP.good + VP.easy;
+    const pct = answeredCount ? Math.round(strong / answeredCount * 100) : 0;
+    const retryIds = idsArg(VP.queue.map(card => card.id));
+    const missedIds = [...new Set(VP.missedIds)];
+    const missedBtn = missedIds.length ? `<button class="prac-sum-retry" onclick="startVocabPractice({ids:${idsArg(missedIds)},skipSessionFilter:true,dir:'${VP.dir}'})">Review Again</button>` : '';
+    const modeTag = VP.dir === 'en2de'
+      ? `<div style="font-size:11px;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:99px;display:inline-block;padding:3px 10px;margin-bottom:12px">🇬🇧 English → German</div>`
+      : `<div style="font-size:11px;color:var(--accent);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:99px;display:inline-block;padding:3px 10px;margin-bottom:12px">🇩🇪 German → English</div>`;
+    ov.innerHTML = `
+  <div class="practice-hdr"><span style="font-size:16px;font-weight:700;color:var(--text)">Vocab Practice Complete</span></div>
+  <div class="practice-body">
+    <div class="prac-summary">
+      <div class="prac-sum-icon">🗂️</div>
+      <div class="prac-sum-title">${pct >= 80 ? 'Strong recall' : pct >= 50 ? 'Good progress' : 'Keep reviewing'}</div>
+      <div class="prac-sum-sub">You reviewed ${total} vocab card${total !== 1 ? 's' : ''}</div>
+      ${modeTag}
+      <div class="prac-sum-stats vocab-sum-stats">
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--red)">${VP.again}</div><div class="prac-sum-l">Again</div></div>
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--amber)">${VP.hard}</div><div class="prac-sum-l">Hard</div></div>
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--green)">${VP.good}</div><div class="prac-sum-l">Good</div></div>
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--blue)">${VP.easy}</div><div class="prac-sum-l">Easy</div></div>
+      </div>
+      <div class="prac-sum-actions">
+        ${missedBtn}
+        <button class="prac-sum-retry" onclick="startVocabPractice({ids:${retryIds},isSRS:${VP.isSRS},dir:'${VP.dir}'})">Practice Again</button>
+        <button class="prac-sum-done" onclick="closePractice()">Done</button>
+      </div>
+    </div>
+  </div>`;
+    document.body.appendChild(ov);
+    return;
+  }
+
+  const card = VP.queue[VP.idx];
+  const topic = vocabTopicById(card.topic);
+  const total = VP.queue.length;
+  const pct = Math.round(VP.idx / total * 100);
+  const germanFront = VP.dir === 'de2en';
+  const dirLabel = germanFront ? '🇩🇪→🇬🇧' : '🇬🇧→🇩🇪';
+  const frontHtml = germanFront
+    ? `<div class="practice-de vocab-practice-term" lang="de">${esc(vocabDisplay(card))}</div><div class="practice-ph">${esc(vocabMetaLabel(card))}</div>`
+    : `<div class="practice-de vocab-practice-term">${esc(card.en)}</div><div class="practice-ph">Recall the German term${card.pos === 'noun' ? ', article, and gender' : ''}</div>`;
+  const revealedHtml = germanFront
+    ? `<div class="practice-en">${esc(card.en)}</div>`
+    : `<div class="practice-en" lang="de">${esc(vocabDisplay(card))}</div><div class="practice-use">${esc(vocabMetaLabel(card))}</div>`;
+  const listenHtml = germanFront || VP.revealed
+    ? `<div style="display:flex;justify-content:center;margin:10px 0">
+      <button class="act-btn speak-btn" data-id="vprac-${card.id}" onclick="speak(${jsArg(vocabSpeakText(card))},'vprac-${card.id}')" style="font-size:13px;padding:8px 18px" type="button">
+        ${ICO.speak} Listen
+      </button>
+    </div>`
+    : '';
+  const ratingHelp = DB.vocabLearned.has(card.id)
+    ? 'Again = 1 day · Hard = shorter interval · Good = normal interval · Easy = longer interval'
+    : 'Again requeues · Hard = 1 day · Good = 3 days · Easy = 5 days';
+  ov.innerHTML = `
+  <div class="practice-hdr">
+    <button class="practice-exit" onclick="closePractice()">Exit</button>
+      <div class="practice-prog-wrap">
+      <div class="practice-prog-bar"><div class="practice-prog-fill" style="width:${pct}%"></div></div>
+      <div class="practice-prog-lbl">${VP.idx + 1}/${total} · ${dirLabel} · Again ${VP.again} · Hard ${VP.hard} · Good ${VP.good} · Easy ${VP.easy}</div>
+    </div>
+  </div>
+  <div class="practice-body">
+    <div class="practice-card vocab-practice-card">
+      ${topic ? `<div class="practice-topic-lbl">${topic.emoji} ${topic.name} - <span class="lvl-tag l${card.level}" style="display:inline">${card.level}</span></div>` : ''}
+      ${frontHtml}
+      ${VP.revealed ? `
+        ${revealedHtml}
+        <div class="vocab-practice-example"><strong>Example</strong><span lang="de">${esc(card.example.de)}</span><em>${esc(card.example.en)}</em></div>
+        ${card.plural ? `<div class="practice-use"><strong>Plural:</strong> <span lang="de">${esc(card.plural)}</span></div>` : ''}
+      ` : `<button class="practice-reveal-hint" onclick="vocabPracticeReveal()" type="button">${germanFront ? 'Tap to reveal meaning' : 'Tap to reveal German'}</button>`}
+    </div>
+    ${listenHtml}
+    ${VP.revealed ? `
+      <div class="vocab-rating-help">${esc(ratingHelp)}</div>
+      <div class="vocab-rating-btns">
+        <button class="vocab-rate again" onclick="vocabPracticeAnswer('again')">Again</button>
+        <button class="vocab-rate hard" onclick="vocabPracticeAnswer('hard')">Hard</button>
+        <button class="vocab-rate good" onclick="vocabPracticeAnswer('good')">Good</button>
+        <button class="vocab-rate easy" onclick="vocabPracticeAnswer('easy')">Easy</button>
+      </div>` : ''}
+    <div class="kbd-hint" style="margin-top:10px">
+      <span class="kbd">Space</span> reveal &nbsp;
+      <span class="kbd">→</span> skip
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  if (!VP.revealed && germanFront) {
+    if (isMobile) speak(vocabSpeakText(card), `vprac-${card.id}`);
+    else setTimeout(() => speak(vocabSpeakText(card), `vprac-${card.id}`), 150);
+  }
+}
+
+function vocabPracticeReveal() {
+  VP.revealed = !VP.revealed;
+  renderVocabPractice();
+  if (VP.revealed && VP.dir === 'en2de' && VP.idx < VP.queue.length) {
+    const card = VP.queue[VP.idx];
+    setTimeout(() => speak(vocabSpeakText(card), `vprac-${card.id}`), 200);
+  }
+}
+
+function vocabPracticeAnswer(rating) {
+  const currentCard = VP.queue[VP.idx];
+  if (!currentCard) return;
+  const attemptKey = String(VP.idx);
+  if (VP.answered[attemptKey]) {
+    VP.idx++;
+    VP.revealed = false;
+    renderVocabPractice();
+    return;
+  }
+  const intervalBefore = DB.vocabSrs[currentCard.id] ? DB.vocabSrs[currentCard.id].interval || 0 : 0;
+  const scheduled = scheduleVocab(currentCard.id, rating);
+  const intervalAfter = scheduled.intervalAfter;
+  VP.answered[attemptKey] = rating;
+  if (rating === 'again') VP.again++;
+  else if (rating === 'hard') VP.hard++;
+  else if (rating === 'easy') VP.easy++;
+  else VP.good++;
+
+  if (rating === 'again') {
+    VP.missedIds.push(currentCard.id);
+    if (!scheduled.learned && !VP.queue.slice(VP.idx + 1).some(card => card.id === currentCard.id)) {
+      const insertAt = Math.min(VP.queue.length, VP.idx + 3);
+      VP.queue.splice(insertAt, 0, currentCard);
+    }
+  }
+  recordVocabAttempt({ id: currentCard.id, result: rating, intervalBefore, intervalAfter, wasDue: scheduled.wasDue });
+  save();
+  VP.idx++;
+  VP.revealed = false;
+  renderVocabPractice();
+}
+
+function vocabPracticeNext() {
+  if (VP.idx < VP.queue.length) {
+    const currentCard = VP.queue[VP.idx];
+    const attemptKey = String(VP.idx);
+    if (currentCard && !VP.answered[attemptKey]) {
+      VP.answered[attemptKey] = 'skip';
+      VP.skipped++;
+      recordVocabAttempt({ id: currentCard.id, result: 'again', intervalBefore: 0, intervalAfter: 0, wasDue: false });
+      save();
+    }
+    VP.idx++;
+    VP.revealed = false;
+    renderVocabPractice();
+  }
+}
 
 // ==============================
 // PATTERN PRACTICE MODE
@@ -1844,6 +2616,19 @@ document.addEventListener('keydown', e => {
     if (e.code === 'ArrowLeft') { e.preventDefault(); patternPracticePrev(); return; }
     return;
   }
+  // Vocab practice keyboard shortcuts
+  if (VP.active) {
+    if (e.key === 'Escape') { closePractice(); return; }
+    if (VP.idx >= VP.queue.length) return;
+    if (!isTyping && e.code === 'Space') { e.preventDefault(); vocabPracticeReveal(); return; }
+    if (e.code === 'ArrowRight') { e.preventDefault(); vocabPracticeNext(); return; }
+    if (VP.revealed && ['1', '2', '3', '4'].includes(e.key)) {
+      e.preventDefault();
+      vocabPracticeAnswer({ 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' }[e.key]);
+      return;
+    }
+    return;
+  }
   // Sentence practice keyboard shortcuts
   if (!P.active) return;
   if (e.key === 'Escape') { closePractice(); return; }
@@ -1980,13 +2765,30 @@ function mergeAttempts(currentAttempts = [], importedAttempts = []) {
   return [...byKey.values()].slice(-1000);
 }
 
+function mergeGrammarScores(currentScores = {}, importedScores = {}) {
+  const merged = {};
+  [...new Set([...Object.keys(importedScores || {}), ...Object.keys(currentScores || {})])].forEach(id => {
+    const current = currentScores[id];
+    const imported = importedScores[id];
+    if (!current) merged[id] = imported;
+    else if (!imported) merged[id] = current;
+    else {
+      const currentRate = current.total ? current.correct / current.total : 0;
+      const importedRate = imported.total ? imported.correct / imported.total : 0;
+      const best = currentRate >= importedRate ? current : imported;
+      merged[id] = { ...best, attempts: (current.attempts || 0) + (imported.attempts || 0) };
+    }
+  });
+  return merged;
+}
+
 function applyImport(text) {
   const errEl = document.getElementById('import-err');
   const show = msg => { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
   if (!text.trim()) { show('❌ Nothing to import — paste or load a file first.'); return; }
   let parsed;
   try { parsed = JSON.parse(text); } catch (e) { show('❌ Invalid JSON. Make sure you copied the full text without changes.'); return; }
-  if (!parsed || typeof parsed !== 'object' || (!Array.isArray(parsed.learned) && !parsed.streak && !parsed.srs && !parsed.attempts)) { show('❌ This doesn\'t look like a DeutschDaily backup file.'); return; }
+  if (!parsed || typeof parsed !== 'object' || (!Array.isArray(parsed.learned) && !Array.isArray(parsed.vocabLearned) && !Array.isArray(parsed.grammarStudied) && !parsed.streak && !parsed.srs && !parsed.vocabSrs && !parsed.grammarScores && !parsed.attempts && !parsed.vocabAttempts)) { show('❌ This doesn\'t look like a DeutschDaily backup file.'); return; }
   const imported = normalizeDb(parsed);
   const current = dbToObj();
   const mergeHistoryWords = (a, b) => {
@@ -2009,6 +2811,16 @@ function applyImport(text) {
     historyWords: mergeHistoryWords(imported.historyWords, current.historyWords),
     srs: mergeSrsMaps(current.srs, imported.srs),
     patternSrs: mergeSrsMaps(current.patternSrs, imported.patternSrs),
+    vocabLearned: [...new Set([...current.vocabLearned, ...imported.vocabLearned])],
+    vocabFavorites: [...new Set([...current.vocabFavorites, ...imported.vocabFavorites])],
+    vocabSrs: mergeSrsMaps(current.vocabSrs, imported.vocabSrs),
+    vocabAttempts: mergeAttempts(current.vocabAttempts, imported.vocabAttempts),
+    vocabDailyGoal: DB.vocabDailyGoal,
+    vocabDailyQueue: DB.vocabDailyQueue,
+    vocabDailyQueueDate: DB.vocabDailyQueueDate,
+    vocabDailyQueueDone: [...new Set([...current.vocabDailyQueueDone, ...imported.vocabDailyQueueDone])],
+    grammarStudied: [...new Set([...current.grammarStudied, ...imported.grammarStudied])],
+    grammarScores: mergeGrammarScores(current.grammarScores, imported.grammarScores),
     attempts: mergeAttempts(current.attempts, imported.attempts),
     patternAttempts: mergeAttempts(current.patternAttempts, imported.patternAttempts),
     settings: current.settings,
@@ -2020,7 +2832,7 @@ function applyImport(text) {
   // Show success toast
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#16A34A;color:white;padding:10px 20px;border-radius:99px;font-size:13px;font-weight:600;z-index:400;box-shadow:0 4px 12px rgba(0,0,0,0.15)';
-  toast.textContent = `✅ Imported! ${merged.learned.length} sentences learned · ${merged.favorites.length} saved`;
+  toast.textContent = `✅ Imported! ${merged.learned.length} sentences · ${merged.vocabLearned.length} vocab · ${merged.grammarStudied.length} grammar topics`;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }

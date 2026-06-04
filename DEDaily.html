@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#4F46E5">
   <title>DeutschDaily</title>
   <link rel="icon" href="src/assets/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="src/styles.css?v=history-20260523">
+  <link rel="stylesheet" href="src/styles.css?v=grammar-20260604">
 </head>
 
 <body>
@@ -23,6 +23,8 @@
       <nav class="nav-desktop" style="flex:1">
         <button class="nb on" id="nb-today" onclick="nav('today')"><span class="nb-icon-wrap"><span class="nb-icon">📅</span></span> Today</button>
         <button class="nb" id="nb-browse" onclick="nav('browse')"><span class="nb-icon-wrap"><span class="nb-icon">📚</span></span> Browse</button>
+        <button class="nb" id="nb-vocab" onclick="nav('vocab')"><span class="nb-icon-wrap"><span class="nb-icon">🗂️</span></span> Vocab</button>
+        <button class="nb" id="nb-grammar" onclick="nav('grammar')"><span class="nb-icon-wrap"><span class="nb-icon">📘</span></span> Grammar</button>
         <button class="nb" id="nb-patterns" onclick="nav('patterns')"><span class="nb-icon-wrap"><span class="nb-icon">🧩</span></span> Patterns</button>
         <button class="nb" id="nb-library" onclick="nav('saved')"><span class="nb-icon-wrap"><span class="nb-icon">📖</span></span> Library</button>
         <button class="nb" id="nb-history" onclick="nav('history')"><span class="nb-icon-wrap"><span class="nb-icon">🗓️</span></span> History</button>
@@ -55,6 +57,8 @@
     <nav class="mobile-nav">
       <button class="mnb on" id="mnb-today" onclick="nav('today')"><span class="mnb-icon">📅</span>Today</button>
       <button class="mnb" id="mnb-browse" onclick="nav('browse')"><span class="mnb-icon">📚</span>Browse</button>
+      <button class="mnb" id="mnb-vocab" onclick="nav('vocab')"><span class="mnb-icon">🗂️</span>Vocab</button>
+      <button class="mnb" id="mnb-grammar" onclick="nav('grammar')"><span class="mnb-icon">📘</span>Grammar</button>
       <button class="mnb" id="mnb-patterns" onclick="nav('patterns')"><span class="mnb-icon">🧩</span>Patterns</button>
       <button class="mnb" id="mnb-library" onclick="nav('saved')"><span class="mnb-icon">📖</span>Library</button>
       <button class="mnb" id="mnb-history" onclick="nav('history')"><span class="mnb-icon">🗓️</span>History</button>
@@ -73,8 +77,10 @@
 
   <script src="src/content.js?v=history-20260523"></script>
   <script src="src/learning.js?v=history-20260523"></script>
-  <script src="src/storage.js?v=history-20260523"></script>
-  <script src="src/app.js?v=history-20260523"></script>
+  <script src="src/vocab.js?v=vocab-20260525"></script>
+  <script src="src/grammar.js?v=grammar-20260604"></script>
+  <script src="src/storage.js?v=grammar-20260604"></script>
+  <script src="src/app.js?v=grammar-20260604"></script>
 </body>
 
 </html>

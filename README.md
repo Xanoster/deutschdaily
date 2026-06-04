@@ -6,6 +6,8 @@ DeutschDaily is an offline-first daily German practice app focused on useful res
 
 - Daily sentence queue with progress tracking
 - Spaced repetition scheduling
+- 500-card daily-life vocabulary deck with articles, gender, plurals, examples, and Anki-style ratings
+- A1, A2, and B1 grammar curriculum with a complete topic index, study tracking, focused explanations, examples, and generated exercises
 - Browse by topic
 - Pattern learning and pattern practice
 - German to English and English to German practice
@@ -41,6 +43,8 @@ No install step is required.
 DEDaily.html              App shell and script/style includes
 src/content.js            Topics, patterns, and sentence seed data
 src/learning.js           Learn more generation and teaching metadata
+src/vocab.js              500-card daily-life vocabulary deck
+src/grammar.js            A1/A2/B1 grammar course content
 src/storage.js            Local storage, daily queue, history, and SRS
 src/app.js                Rendering, navigation, practice, TTS, import/export
 src/assets/logo.svg       Minimal app logo and favicon
@@ -84,6 +88,8 @@ The validation checks:
 - sentence IDs are unique
 - topics, levels, and pattern references are valid
 - every sentence has learning metadata
+- vocabulary cards have valid topics, source refs, noun gender/article data, and examples
+- grammar modules cover A1, A2, and B1 with complete lesson metadata
 - expected replies and practice prompts are not generic
 - formal/informal coverage stays above the configured threshold
 - misleading sentence-to-pattern links are blocked by contract checks
