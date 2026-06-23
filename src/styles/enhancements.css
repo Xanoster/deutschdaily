@@ -1034,7 +1034,33 @@
   line-height: 1.4;
   text-align: left;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
+.grammar-quiz-key {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--border);
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.grammar-quiz-mark {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.grammar-quiz-option.correct .grammar-quiz-key { background: #86EFAC; color: #166534; }
+.grammar-quiz-option.wrong .grammar-quiz-key { background: #FCA5A5; color: #991B1B; }
 
 .grammar-quiz-option:not(:disabled):hover {
   border-color: var(--blue);

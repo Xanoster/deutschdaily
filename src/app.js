@@ -811,7 +811,25 @@ function grammarExerciseOptions(correct, pool, offset) {
   return [...options.slice(rotation), ...options.slice(0, rotation)];
 }
 
+function grammarQuizOptions(item, index) {
+  const options = [item.a, ...(item.d || [])];
+  const rotation = options.length ? (index + 1) % options.length : 0;
+  return [...options.slice(rotation), ...options.slice(0, rotation)];
+}
+
+function grammarQuestionCount(lesson) {
+  return (lesson.quiz && lesson.quiz.length) ? lesson.quiz.length : (lesson.examples || []).length * 2;
+}
+
 function grammarExercisesForLesson(lesson) {
+  if (lesson.quiz && lesson.quiz.length) {
+    return lesson.quiz.map((item, index) => ({
+      prompt: item.q,
+      options: grammarQuizOptions(item, index),
+      answer: item.a,
+      lang: 'de',
+    }));
+  }
   const module = GRAMMAR_MODULE_BY_ID[lesson.moduleId];
   const moduleExamples = module.lessons.flatMap(item => item.examples || []);
   return (lesson.examples || []).flatMap((example, index) => [
@@ -819,6 +837,7 @@ function grammarExercisesForLesson(lesson) {
       prompt: `Choose the German sentence for: ${example.en}`,
       options: grammarExerciseOptions(example.de, moduleExamples.map(item => item.de), index + 1),
       answer: example.de,
+      lang: 'de',
     },
     {
       prompt: `Choose the meaning of: ${example.de}`,
@@ -875,13 +894,13 @@ function renderGrammarIndexItem(lesson, module, index, selected) {
 
 function renderGrammarExercisePanel(lesson) {
   const score = DB.grammarScores[lesson.id];
-  const questionCount = (lesson.examples || []).length * 2;
+  const questionCount = grammarQuestionCount(lesson);
   if (GQ.lessonId !== lesson.id) {
     return `<section class="grammar-exercise-panel" id="grammar-exercise-panel">
   <div>
     <div class="grammar-box-title">Quick check</div>
-    <h3>${questionCount} generated questions</h3>
-    <p>Check both German production and meaning recall for this topic.</p>
+    <h3>${questionCount} practice questions</h3>
+    <p>Fill the gaps and choose the correct forms to lock in this topic.</p>
   </div>
   <div class="grammar-exercise-actions">
     ${score ? `<span class="grammar-best-score">Best ${grammarScorePercent(lesson.id)}%</span>` : ''}
@@ -917,11 +936,12 @@ function renderGrammarExercisePanel(lesson) {
       const isCorrect = option === question.answer;
       const isSelected = GQ.selected === index;
       const state = answered ? isCorrect ? ' correct' : isSelected ? ' wrong' : ' muted' : '';
-      return `<button class="grammar-quiz-option${state}" onclick="answerGrammarExercise(${index})" ${answered ? 'disabled' : ''} type="button">${esc(option)}</button>`;
+      const mark = answered ? (isCorrect ? '<span class="grammar-quiz-mark" aria-hidden="true">\u2713</span>' : (isSelected ? '<span class="grammar-quiz-mark" aria-hidden="true">\u2717</span>' : '')) : '';
+      return `<button class="grammar-quiz-option${state}" onclick="answerGrammarExercise(${index})" ${answered ? 'disabled' : ''}${question.lang ? ` lang="${question.lang}"` : ''} type="button"><span class="grammar-quiz-key" aria-hidden="true">${index + 1}</span>${esc(option)}${mark}</button>`;
     }).join('')}
   </div>
-  ${answered ? `<div class="grammar-quiz-feedback ${question.options[GQ.selected] === question.answer ? 'correct' : 'wrong'}">
-    ${question.options[GQ.selected] === question.answer ? 'Correct.' : `Correct answer: ${esc(question.answer)}`}
+  ${answered ? `<div class="grammar-quiz-feedback ${question.options[GQ.selected] === question.answer ? 'correct' : 'wrong'}" role="status">
+    ${question.options[GQ.selected] === question.answer ? '\u2713 Correct.' : `\u2717 Correct answer: ${esc(question.answer)}`}
   </div>
   <button class="grammar-primary-btn grammar-next-question" onclick="nextGrammarExercise()" type="button">${GQ.index >= GQ.questions.length - 1 ? 'Finish' : 'Next question'}</button>` : ''}
 </section>`;
@@ -3010,6 +3030,17 @@ function patternPracticePrev() {
 document.addEventListener('keydown', e => {
   const tag = document.activeElement ? document.activeElement.tagName : '';
   const isTyping = tag === 'INPUT' || tag === 'TEXTAREA';
+  // Grammar quiz keyboard shortcuts
+  if (GQ.lessonId && !GQ.complete && GQ.questions.length) {
+    if (!isTyping) {
+      const question = GQ.questions[GQ.index];
+      if (GQ.selected === null && question && ['1', '2', '3', '4'].includes(e.key)) {
+        const idx = Number(e.key) - 1;
+        if (idx < question.options.length) { e.preventDefault(); answerGrammarExercise(idx); return; }
+      }
+      if (GQ.selected !== null && (e.key === 'Enter' || e.code === 'ArrowRight')) { e.preventDefault(); nextGrammarExercise(); return; }
+    }
+  }
   // Pattern practice keyboard shortcuts
   if (PP.active) {
     if (e.key === 'Escape') { closePractice(); return; }

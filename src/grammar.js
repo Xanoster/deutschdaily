@@ -76,6 +76,17 @@ const GRAMMAR_MODULES = [
         practice: ['Use brauchen, suchen, kaufen with der Termin, die Karte, das Formular.', 'Replace nouns with accusative pronouns in three short sentences.'],
       },
       {
+        id: 'a1-possessive-articles',
+        title: 'Possessive Articles',
+        focus: 'mein, dein, sein, ihr, unser, euer, Ihr',
+        explanation: 'Possessive articles say who something belongs to. They stand in front of a noun and decline exactly like ein and kein, so the ending depends on the gender, number, and case of the noun that follows, not on the owner.',
+        rules: ['Owner forms: ich -> mein, du -> dein, er/es -> sein, sie -> ihr, wir -> unser, ihr -> euer, sie -> ihr, Sie -> Ihr.', 'They take ein-word endings: feminine and plural add -e (meine Tasche, meine Eltern); masculine and neuter stay bare in nominative (mein Vater, mein Auto).', 'In accusative, only masculine adds -en: Ich suche meinen Schlüssel.'],
+        examples: [{ de: 'Das ist mein Auto.', en: 'That is my car.' }, { de: 'Wie ist deine Telefonnummer?', en: 'What is your phone number?' }, { de: 'Ich suche meinen Schlüssel.', en: 'I am looking for my key.' }],
+        tip: 'The ending matches the noun after it, not the owner: meine Mutter is -e because Mutter is feminine, not because you are female.',
+        mistakes: ['Do not say mein Mutter; feminine nouns need meine Mutter.', 'Do not confuse ihr (her/their) with Ihr (your, formal); only the formal one is capitalized.'],
+        practice: ['Introduce your family with mein/meine plus a noun.', 'Make three accusative sentences with meinen, deinen, and seinen.'],
+      },
+      {
         id: 'a1-past-tense-imperfect',
         title: 'Simple Past: war, hatte, gab',
         focus: 'war, hatte, gab',
@@ -91,8 +102,8 @@ const GRAMMAR_MODULES = [
         title: 'Articles And Nouns: Dative',
         focus: 'indirect object and dative articles',
         explanation: 'Dative is the case for many indirect objects and for many prepositions. It is the first case where several articles visibly change, so it needs slow, repeated practice in real chunks.',
-        rules: ['Definite articles: dem Mann, der Frau, dem Kind, den Kindern.', 'Indefinite articles: einem Mann, einer Frau, einem Kind, keinen Kindern.', 'Plural dative often adds -n to the noun if the plural does not already end in -n or -s.'],
-        examples: [{ de: 'Ich helfe dem Mann.', en: 'I help the man.' }, { de: 'Sie schreibt einer Freundin.', en: 'She writes to a friend.' }, { de: 'Ich fahre mit den Kindern.', en: 'I travel with the children.' }],
+        rules: ['Definite articles: dem Mann, der Frau, dem Kind, den Kindern.', 'Indefinite articles: einem Mann, einer Frau, einem Kind, keinen Kindern.', 'Dative personal pronouns: mir, dir, ihm, ihr, ihm, uns, euch, ihnen/Ihnen.', 'Plural dative often adds -n to the noun if the plural does not already end in -n or -s.'],
+        examples: [{ de: 'Ich helfe dem Mann.', en: 'I help the man.' }, { de: 'Kannst du mir helfen?', en: 'Can you help me?' }, { de: 'Sie schreibt einer Freundin.', en: 'She writes to a friend.' }, { de: 'Ich fahre mit den Kindern.', en: 'I travel with the children.' }],
         tip: 'Learn dative in chunks with prepositions: mit dem, bei der, zu den.',
         mistakes: ['Do not use den for every dative noun; dem is masculine and neuter singular.', 'Do not forget the plural dative -n when it is needed.'],
         practice: ['Make sentences with helfen, schreiben, danken, and mit.', 'Build a mini table for der Termin, die Karte, das Formular, die Kinder.'],
@@ -559,5 +570,252 @@ const GRAMMAR_MODULES = [
   },
 ];
 
-const GRAMMAR_LESSONS = GRAMMAR_MODULES.flatMap(module => module.lessons.map(lesson => ({ ...lesson, moduleId: module.id, level: module.level })));
+// ══════════════════════════════════════════════
+// FORM-FOCUSED QUIZZES (gap-fill / form choice)
+// q = question, a = correct answer, d = distractors. Options = [a, ...d] shuffled at render.
+// ══════════════════════════════════════════════
+const GRAMMAR_QUIZZES = {
+  'a1-word-position': [
+    { q: "Choose the correct order: 'Heute ___ zu Hause.'", a: 'arbeite ich', d: ['ich arbeite', 'arbeiten ich'] },
+    { q: "Put the verb in position 2: 'Morgen ___ ich nach Berlin.' (fahren)", a: 'fahre', d: ['fährt', 'fahren'] },
+    { q: "Negate correctly: 'Ich komme morgen.'", a: 'Ich komme morgen nicht.', d: ['Ich nicht komme morgen.', 'Ich komme nicht morgen.'] },
+  ],
+  'a1-verbs': [
+    { q: "Complete: 'Du ___ Deutsch.' (lernen)", a: 'lernst', d: ['lernt', 'lernen'] },
+    { q: "Finish the separable verb: 'Sie ruft Michael ___.'", a: 'an', d: ['auf', 'aus'] },
+    { q: "Modal verb: 'Ich muss am Montag ___.' (arbeiten)", a: 'arbeiten', d: ['arbeite', 'gearbeitet'] },
+  ],
+  'a1-articles-nouns-nominative': [
+    { q: "Choose the article: '___ Museum ist groß.'", a: 'Das', d: ['Der', 'Die'] },
+    { q: "Negate the noun: 'Das ist ___ Kaffee.'", a: 'kein', d: ['nicht', 'keine'] },
+    { q: "Plural negation: 'Das sind ___ Kinder.'", a: 'keine', d: ['kein', 'nicht'] },
+  ],
+  'a1-building-questions': [
+    { q: "Ask about a destination: '___ gehst du?'", a: 'Wohin', d: ['Wo', 'Woher'] },
+    { q: "Ask about origin: '___ kommst du?'", a: 'Woher', d: ['Wohin', 'Wo'] },
+    { q: "Make a yes/no question from 'Du wohnst in Köln.'", a: 'Wohnst du in Köln?', d: ['Du wohnst in Köln?', 'Wohnst in Köln du?'] },
+  ],
+  'a1-adjectives': [
+    { q: "Predicate adjective: 'Der Apfel ___ rot.'", a: 'ist', d: ['sind', 'bist'] },
+    { q: "Negate: 'Die Bücher sind ___ teuer.'", a: 'nicht', d: ['kein', 'keine'] },
+    { q: 'Which is correct (no ending after sein)?', a: 'Die Lehrerin ist freundlich.', d: ['Die Lehrerin ist freundliche.', 'Die freundliche Lehrerin ist.'] },
+  ],
+  'a1-articles-nouns-accusative': [
+    { q: "Accusative masculine: 'Sie isst ___ Kuchen.'", a: 'den', d: ['der', 'dem'] },
+    { q: "Accusative: 'Ich brauche ___ Termin.'", a: 'einen', d: ['ein', 'einem'] },
+    { q: "Accusative pronoun (you, informal): 'Ich liebe ___.'", a: 'dich', d: ['dir', 'du'] },
+  ],
+  'a1-possessive-articles': [
+    { q: "Choose (my): '___ Mutter heißt Anna.'", a: 'Meine', d: ['Mein', 'Meinen'] },
+    { q: "Accusative (my): 'Ich suche ___ Schlüssel.'", a: 'meinen', d: ['mein', 'meine'] },
+    { q: "Formal 'your': '___ Auto ist neu.'", a: 'Ihr', d: ['ihr', 'euer'] },
+  ],
+  'a1-past-tense-imperfect': [
+    { q: "Simple past of sein: 'Ich ___ krank.'", a: 'war', d: ['bin', 'hatte'] },
+    { q: "Simple past of haben: 'Du ___ gestern Spaß.'", a: 'hattest', d: ['warst', 'hast'] },
+    { q: "There was a problem: '___ ein Problem.'", a: 'Es gab', d: ['Es gibt', 'Es hatte'] },
+  ],
+  'a1-building-good-sentences': [
+    { q: 'TE-KA-MO-LO order — choose correct:', a: 'Ich fahre morgen mit dem Bus nach Köln.', d: ['Ich fahre mit dem Bus morgen nach Köln.', 'Ich fahre nach Köln morgen mit dem Bus.'] },
+    { q: "Verb in position 2: 'Am Montag ___ ich.'", a: 'arbeite', d: ['ich arbeite', 'arbeiten'] },
+    { q: 'Which question is correct?', a: 'Gefällt er dir?', d: ['Er gefällt dir?', 'Dir er gefällt?'] },
+  ],
+  'a1-imperative': [
+    { q: "Informal (du): '___ das bitte noch einmal!' (sagen)", a: 'Sag', d: ['Sagst', 'Sagen'] },
+    { q: "Formal (Sie): '___ Sie mir bitte Bescheid!' (sagen)", a: 'Sagen', d: ['Sag', 'Sagt'] },
+    { q: "Separable imperative: 'Nimm deinen Ausweis ___!'", a: 'mit', d: ['an', 'auf'] },
+  ],
+  'a1-prepositions': [
+    { q: "Dative after mit: 'Ich fahre mit ___ Bus.'", a: 'dem', d: ['den', 'der'] },
+    { q: "Accusative preposition: 'Maria kann ___ Handy nicht leben.'", a: 'ohne', d: ['mit', 'von'] },
+    { q: 'Which preposition takes the accusative?', a: 'für', d: ['mit', 'seit'] },
+  ],
+  'a1-past-tense-perfect': [
+    { q: "Perfekt with haben: 'Ich ___ den Film gesehen.'", a: 'habe', d: ['bin', 'hatte'] },
+    { q: "Perfekt with sein: 'Ich ___ nach Hause gegangen.'", a: 'bin', d: ['habe', 'war'] },
+    { q: 'Participle at the end — choose correct:', a: 'Hast du den Film gesehen?', d: ['Hast du gesehen den Film?', 'Habst du den Film gesehen?'] },
+  ],
+  'a1-connecting-sentences': [
+    { q: "Correction after a negative: 'Nicht am Montag, ___ am Mittwoch.'", a: 'sondern', d: ['aber', 'oder'] },
+    { q: "Reason, verb stays in position 2: 'Sie hat keine Zeit, ___ sie arbeitet.'", a: 'denn', d: ['weil', 'dass'] },
+    { q: "Join equal ideas: 'Pia wohnt in Berlin ___ arbeitet dort.'", a: 'und', d: ['sondern', 'denn'] },
+  ],
+  'a2-comparative-form': [
+    { q: "Comparative: 'Der Zug ist ___ als der Bus.' (schnell)", a: 'schneller', d: ['schnell', 'am schnellsten'] },
+    { q: "Irregular: 'Er spricht ___ Deutsch als seine Schwester.' (gut)", a: 'besser', d: ['guter', 'gutter'] },
+    { q: "Use 'als' or 'wie'? 'schneller ___ der Bus'", a: 'als', d: ['wie', 'als wie'] },
+  ],
+  'a2-superlative': [
+    { q: "Adverbial superlative: 'Er rennt ___.' (schnell)", a: 'am schnellsten', d: ['der schnellste', 'am schnelle'] },
+    { q: "Before a noun: 'Er ist der ___ Läufer.' (schnell)", a: 'schnellste', d: ['am schnellsten', 'schnellster'] },
+    { q: "Equal comparison: 'Er spricht ___ gut ___ ich.'", a: 'so … wie', d: ['als … wie', 'mehr … als'] },
+  ],
+  'a2-dative-accusative': [
+    { q: "Order (dative before accusative): 'Ich schicke ___.'", a: 'dem Professor einen Brief', d: ['einen Brief dem Professor', 'den Professor einen Brief'] },
+    { q: "Both pronouns (accusative before dative): 'Ich gebe ___.'", a: 'ihn dir', d: ['dir ihn', 'dir ihm'] },
+    { q: "Dative article: 'Sie erklärt ___ Kunden den Vertrag.'", a: 'dem', d: ['den', 'der'] },
+  ],
+  'a2-modalverbs-imperfect': [
+    { q: "Simple past: 'Wir ___ um 7 Uhr aufstehen.' (müssen)", a: 'mussten', d: ['mussen', 'müssten'] },
+    { q: "Past of können: 'Ich ___ gestern nicht kommen.'", a: 'konnte', d: ['könnte', 'gekonnt'] },
+    { q: 'Infinitive stays at the end — choose correct:', a: 'Er durfte nie Fahrrad fahren.', d: ['Er durfte nie Fahrrad fährt.', 'Er durfte nie fuhr Fahrrad.'] },
+  ],
+  'a2-connecting-sentences-2': [
+    { q: "Verb to the end: 'Ich bleibe zu Hause, weil ich krank ___.'", a: 'bin', d: ['ist', 'sein'] },
+    { q: 'Choose correct:', a: '…, weil es teuer ist.', d: ['…, weil es ist teuer.', '…, weil ist es teuer.'] },
+    { q: "Fronted clause inversion: 'Weil ich keine Zeit habe, ___ ich nicht.'", a: 'komme', d: ['ich komme', 'kommen'] },
+  ],
+  'a2-wenn-falls-dann': [
+    { q: "Verb-final in the condition: 'Wenn es morgen ___, bleiben wir zu Hause.' (regnen)", a: 'regnet', d: ['regnet es', 'es regnet'] },
+    { q: "Main clause after a fronted wenn: 'Wenn es regnet, ___ wir zu Hause.'", a: 'bleiben', d: ['wir bleiben', 'dann wir bleiben'] },
+    { q: 'Which word marks a less certain condition?', a: 'falls', d: ['dann', 'sondern'] },
+  ],
+  'a2-dass-sentences': [
+    { q: "Verb to the end: 'Ich finde, dass er nett ___.'", a: 'ist', d: ['ist nett', 'sein'] },
+    { q: "Modal at the end: 'Es ist schade, dass du nicht kommen ___.'", a: 'kannst', d: ['kannst nicht', 'kann'] },
+    { q: "dass or das? 'Ich denke, ___ es regnet.'", a: 'dass', d: ['das', 'dasss'] },
+  ],
+  'a2-two-way-prepositions': [
+    { q: "Direction (accusative): 'Ich gehe in ___ Supermarkt.'", a: 'den', d: ['dem', 'der'] },
+    { q: "Location (dative): 'Ich bin ___ Supermarkt.'", a: 'im', d: ['in den', 'ins'] },
+    { q: "Position verb: 'Der Brief ___ auf dem Tisch.'", a: 'liegt', d: ['legt', 'steht'] },
+  ],
+  'a2-konjunktiv-ii': [
+    { q: "Polite request: '___ du mir bitte helfen?' (können)", a: 'Könntest', d: ['Kannst', 'Konntest'] },
+    { q: "Wish: 'Ich ___ gerne einen Hund.' (haben)", a: 'hätte', d: ['habe', 'hatte'] },
+    { q: "Unreal 'would': 'Ich ___ nie zu spät kommen.'", a: 'würde', d: ['werde', 'wurde'] },
+  ],
+  'a2-futur-i': [
+    { q: "Futur I: 'Ich ___ morgen anrufen.'", a: 'werde', d: ['bin', 'wurde'] },
+    { q: "Infinitive at the end: 'Wir werden die Unterlagen ___.'", a: 'prüfen', d: ['prüft', 'geprüft'] },
+    { q: 'Choose correct:', a: 'Es wird wahrscheinlich regnen.', d: ['Es wird wahrscheinlich regnet.', 'Es werden wahrscheinlich regnen.'] },
+  ],
+  'a2-genitiv': [
+    { q: "Feminine genitive: 'Das ist das Buch ___ Lehrerin.'", a: 'der', d: ['des', 'dem'] },
+    { q: "Masculine genitive: 'Das ist das Buch ___.' (der Lehrer)", a: 'des Lehrers', d: ['dem Lehrer', 'der Lehrer'] },
+    { q: 'Which question word asks about possession?', a: 'Wessen', d: ['Wer', 'Wem'] },
+  ],
+  'a2-pronouns': [
+    { q: "Accusative of jemand: 'Kennst du ___ hier?'", a: 'jemanden', d: ['jemand', 'jemandem'] },
+    { q: "'man' in the accusative becomes:", a: 'einen', d: ['man', 'einem'] },
+    { q: "Choose correct (none, masc.): 'Ich habe ___.'", a: 'keinen', d: ['kein', 'keine'] },
+  ],
+  'a2-reflective-verbs': [
+    { q: "Accusative reflexive: 'Ich melde ___ online an.'", a: 'mich', d: ['mir', 'sich'] },
+    { q: "Dative reflexive (other object present): 'Ich notiere ___ die Adresse.'", a: 'mir', d: ['mich', 'sich'] },
+    { q: "Choose correct: 'Sie freut ___ auf den Urlaub.'", a: 'sich', d: ['ihr', 'sie'] },
+  ],
+  'a2-adjective-declinations': [
+    { q: "After 'einen' (masc. acc.): 'Ich brauche einen ___ Termin.' (neu)", a: 'neuen', d: ['neuer', 'neue'] },
+    { q: "After 'die' (fem. nom.): 'Die ___ Adresse ist richtig.' (neu)", a: 'neue', d: ['neuen', 'neuer'] },
+    { q: "After 'ein' (neut.): 'Haben Sie ein ___ Formular?' (ander-)", a: 'anderes', d: ['andere', 'anderen'] },
+  ],
+  'a2-n-declination': [
+    { q: "Weak noun accusative: 'Ich frage den ___.' (Kollege)", a: 'Kollegen', d: ['Kollege', 'Kolleg'] },
+    { q: "Dative: 'Ich helfe dem ___.' (Nachbar)", a: 'Nachbarn', d: ['Nachbar', 'Nachbaren'] },
+    { q: "Genitive: 'Der Name des ___ fehlt.' (Kunde)", a: 'Kunden', d: ['Kunde', 'Kundes'] },
+  ],
+  'a2-prepositional-objects': [
+    { q: "Verb + preposition: 'Ich warte ___ den Bus.'", a: 'auf', d: ['für', 'an'] },
+    { q: "Case after 'warten auf': 'Ich warte auf ___ Bus.'", a: 'den', d: ['dem', 'der'] },
+    { q: "'sich interessieren ___' + accusative", a: 'für', d: ['an', 'über'] },
+  ],
+  'a2-imperfect-tense': [
+    { q: "Weak Präteritum: 'Er ___ ein Geschenk.' (kaufen)", a: 'kaufte', d: ['kaufen', 'gekauft'] },
+    { q: "Strong Präteritum: 'Er ___ nach Hause.' (gehen)", a: 'ging', d: ['gehte', 'gegangen'] },
+    { q: "Mixed verb: 'Er ___ die Antwort nicht.' (wissen)", a: 'wusste', d: ['wisste', 'gewusst'] },
+  ],
+  'b1-konjunktiv-ii-deepening': [
+    { q: "Unreal present: 'Wenn ich mehr Zeit ___, würde ich mehr üben.' (haben)", a: 'hätte', d: ['habe', 'hatte'] },
+    { q: "Past unreal: 'Ich ___ früher gekommen, wenn der Zug pünktlich gewesen wäre.' (sein)", a: 'wäre', d: ['würde', 'hätte'] },
+    { q: "Shortest natural form for 'could':", a: 'könnte', d: ['würde können', 'konnte'] },
+  ],
+  'b1-passive': [
+    { q: "Present passive: 'Der Antrag ___ geprüft.'", a: 'wird', d: ['ist', 'hat'] },
+    { q: "Past passive: 'Die Unterlagen ___ geschickt.'", a: 'wurden', d: ['sind', 'haben'] },
+    { q: 'Participle at the end — choose correct:', a: 'Die Rechnung wird automatisch bezahlt.', d: ['Die Rechnung wird bezahlt automatisch.', 'Die Rechnung bezahlt wird automatisch.'] },
+  ],
+  'b1-temporal-clauses': [
+    { q: 'A one-time past event uses:', a: 'als', d: ['wenn', 'wann'] },
+    { q: 'A repeated event or future condition uses:', a: 'wenn', d: ['als', 'während'] },
+    { q: "Sequence 'before': 'Ich prüfe alles, ___ ich den Antrag schicke.'", a: 'bevor', d: ['nachdem', 'seitdem'] },
+  ],
+  'b1-relative-clauses-cases': [
+    { q: "Subject pronoun (masc.): 'Der Mann, ___ dort wartet, …'", a: 'der', d: ['den', 'dem'] },
+    { q: "Object pronoun (neut., accusative): 'Das Formular, ___ ich brauche, …'", a: 'das', d: ['dem', 'der'] },
+    { q: "Dative pronoun: 'Die Kollegin, ___ ich geschrieben habe, …'", a: 'der', d: ['die', 'den'] },
+  ],
+  'b1-purpose-clauses': [
+    { q: 'Same subject for both actions — use:', a: 'um … zu', d: ['damit', 'weil'] },
+    { q: "Different subjects: 'Ich schicke den Link, ___ Sie das Formular finden.'", a: 'damit', d: ['um zu', 'sodass'] },
+    { q: "Separable verb with zu: 'Sie ruft an, um den Termin ___.' (absagen)", a: 'abzusagen', d: ['zu absagen', 'absagen zu'] },
+  ],
+  'b1-infinitive-clauses': [
+    { q: "'without doing': 'Er ging, ___ sich zu verabschieden.'", a: 'ohne', d: ['statt', 'um'] },
+    { q: "'instead of': 'Sie schrieb eine E-Mail, ___ anzurufen.'", a: 'statt', d: ['ohne', 'um'] },
+    { q: "zu + infinitive: 'Ich versuche, den Antrag ___.' (ausfüllen)", a: 'auszufüllen', d: ['ausfüllen', 'zu ausfüllen'] },
+  ],
+  'b1-passive-modal-verbs': [
+    { q: "Modal + passive: 'Der Antrag muss online gestellt ___.'", a: 'werden', d: ['sein', 'worden'] },
+    { q: 'Choose correct:', a: 'Die Rechnung kann später bezahlt werden.', d: ['Die Rechnung kann später werden bezahlt.', 'Die Rechnung kann später bezahlt sein.'] },
+    { q: "Negation: 'Die Unterlagen ___ nicht kopiert werden.' (dürfen)", a: 'dürfen', d: ['darf', 'durften'] },
+  ],
+  'b1-paired-connectors': [
+    { q: "Alternatives: '___ anrufen ___ eine E-Mail schreiben'", a: 'entweder … oder', d: ['weder … noch', 'sowohl … als auch'] },
+    { q: "Double negative: 'Ich habe ___ Zeit ___ Geld.'", a: 'weder … noch', d: ['entweder … oder', 'nicht nur … sondern auch'] },
+    { q: "Both positive: 'Der Kurs ist ___ praktisch ___ interessant.'", a: 'sowohl … als auch', d: ['weder … noch', 'entweder … oder'] },
+  ],
+  'b1-genitive-prepositions': [
+    { q: "Reason (genitive): '___ des Wetters fällt der Termin aus.'", a: 'Wegen', d: ['Trotz', 'Während'] },
+    { q: "Contrast: '___ des Regens kam sie pünktlich.'", a: 'Trotz', d: ['Wegen', 'Innerhalb'] },
+    { q: "Noun ending: 'wegen des ___' (Vertrag)", a: 'Vertrags', d: ['Vertrag', 'Vertragen'] },
+  ],
+  'b1-noun-verb-combinations': [
+    { q: "Fixed expression: 'Wir müssen eine Entscheidung ___.'", a: 'treffen', d: ['machen', 'nehmen'] },
+    { q: "'contact us': 'Bitte nehmen Sie mit uns ___ auf.'", a: 'Kontakt', d: ['Verbindung', 'Bescheid'] },
+    { q: "'comes into effect': 'Die Regel tritt morgen ___.'", a: 'in Kraft', d: ['in Ordnung', 'in Frage'] },
+  ],
+  'b1-future-assumptions': [
+    { q: "Assumption: 'Er ___ wohl noch im Büro sein.'", a: 'wird', d: ['ist', 'hat'] },
+    { q: "Futur II ending: 'Sie wird den Brief schon bekommen ___.'", a: 'haben', d: ['sein', 'worden'] },
+    { q: "Future promise: 'Ich ___ Ihnen morgen antworten.'", a: 'werde', d: ['wurde', 'würde'] },
+  ],
+  'b1-relative-clauses-prepositions': [
+    { q: "Preposition + pronoun: 'die Frau, ___ ich gesprochen habe' (mit)", a: 'mit der', d: ['mit die', 'der mit'] },
+    { q: "'der Kurs, ___ ich mich interessiere' (für)", a: 'für den', d: ['für dem', 'für der'] },
+    { q: "Don't strand the preposition — choose correct:", a: 'das Problem, über das wir sprechen', d: ['das Problem, das wir sprechen über', 'das Problem, über dem wir sprechen'] },
+  ],
+  'b1-da-wo-compounds': [
+    { q: "da-compound for 'auf das': 'Ich warte ___.'", a: 'darauf', d: ['auf das', 'darüber'] },
+    { q: "wo-compound question: '___ warten Sie?'", a: 'Worauf', d: ['Worüber', 'Wofür'] },
+    { q: "'mit dem' becomes:", a: 'damit', d: ['mitdem', 'darmit'] },
+  ],
+  'b1-plusquamperfekt': [
+    { q: "haben-verb: 'Ich ___ den Antrag schon geschickt.'", a: 'hatte', d: ['habe', 'war'] },
+    { q: "sein-verb: 'Als ich ankam, ___ der Arzt schon gegangen.'", a: 'war', d: ['hatte', 'ist'] },
+    { q: 'Choose correct (past before past):', a: 'Ich hatte die Rechnung bezahlt.', d: ['Ich habe die Rechnung bezahlt hatte.', 'Ich war die Rechnung bezahlt.'] },
+  ],
+  'b1-reported-information': [
+    { q: "Report an instruction: 'Ich ___ das Formular online hochladen.'", a: 'soll', d: ['will', 'mag'] },
+    { q: "According to a letter: '___ Brief ist die Zahlung offen.'", a: 'Laut', d: ['Wegen', 'Trotz'] },
+    { q: "Verb-final after dass: 'Sie sagt, dass ich eine Kopie ___.'", a: 'brauche', d: ['brauche nicht', 'brauchen'] },
+  ],
+  'b1-participle-adjectives': [
+    { q: "Partizip I (ongoing): 'die ___ Unterlagen' (fehlen)", a: 'fehlenden', d: ['gefehlten', 'fehlten'] },
+    { q: "Partizip II (completed): 'die ___ Rechnung' (bezahlen)", a: 'bezahlte', d: ['bezahlende', 'bezahlt'] },
+    { q: "With ending: 'Ich suche einen ___ Termin.' (passen)", a: 'passenden', d: ['passend', 'gepasst'] },
+  ],
+  'b1-nominal-style': [
+    { q: "Verb → noun: 'prüfen' becomes 'die ___'", a: 'Prüfung', d: ['Prüfheit', 'Prüfschaft'] },
+    { q: 'Most -ung nouns have which gender?', a: 'feminine (die)', d: ['masculine (der)', 'neuter (das)'] },
+    { q: "'die Anmeldung' comes from which verb?", a: 'anmelden', d: ['anmelten', 'melden'] },
+  ],
+  'b1-opinion-argument-structure': [
+    { q: 'Correct word order — choose:', a: 'Meiner Meinung nach ist das praktischer.', d: ['Meiner Meinung nach das ist praktischer.', 'Meiner Meinung nach es ist praktischer.'] },
+    { q: "Concession: '___ ich wenig Zeit habe, lerne ich täglich.'", a: 'Obwohl', d: ['Trotzdem', 'Deshalb'] },
+    { q: "Balanced argument: '___ teuer, ___ zentral.'", a: 'einerseits … andererseits', d: ['entweder … oder', 'weder … noch'] },
+  ],
+};
+
+const GRAMMAR_LESSONS = GRAMMAR_MODULES.flatMap(module => module.lessons.map(lesson => ({ ...lesson, moduleId: module.id, level: module.level, quiz: GRAMMAR_QUIZZES[lesson.id] || [] })));
 const GRAMMAR_MODULE_BY_ID = Object.fromEntries(GRAMMAR_MODULES.map(module => [module.id, module]));
