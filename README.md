@@ -6,16 +6,16 @@ DeutschDaily is an offline-first daily German practice app focused on useful res
 
 - Daily sentence queue with progress tracking
 - Spaced repetition scheduling
-- 500-card daily-life vocabulary deck with articles, gender, plurals, examples, and Anki-style ratings
-- 2,525-word German frequency dictionary with example sentences, SRS review, and practice mode
+- **Vocabulary**: 2,525-word German frequency dictionary with example sentences, SRS review, and paginated practice (50 words per page)
+- **Sentences**: Browse and practice daily-life resident scenarios by topic with pattern learning and English-to-German translation exercises
 - A1, A2, and B1 grammar curriculum with a complete topic index, study tracking, focused explanations, examples, and generated exercises
-- Browse by topic
 - Pattern learning and pattern practice
 - German to English and English to German practice
 - Text-to-speech support with browser speech synthesis plus optional desktop fallback voices when network audio is available
 - Learn more panels with grammar, variants, reuse ideas, likely replies, and active practice tasks
 - Formal and informal variants where `Sie` / `du` matters
 - Offline local progress storage with export/import backups
+- Responsive sidebar navigation with section grouping (Learn, Track)
 - Minimal SVG app logo for browser tabs and bookmarks
 
 ## Run Locally
