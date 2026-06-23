@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#4F46E5">
   <title>DeutschDaily</title>
   <link rel="icon" href="src/assets/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="src/styles.css?v=grammar-20260604">
+  <link rel="stylesheet" href="src/styles.css?v=vocab-20260623">
 </head>
 
 <body>
@@ -16,20 +16,23 @@
   <div class="dashboard-layout">
     <aside class="sidebar">
       <div class="sidebar-logo-wrap">
-        <button class="sidebar-logo" onclick="nav('today')" type="button">Deutsch<em>Daily</em></button>
+        <button class="sidebar-logo" onclick="nav('today')" type="button" aria-label="DeutschDaily home">
+          <img class="sidebar-logo-mark" src="src/assets/logo.svg" width="32" height="32" alt="">
+          <span class="sidebar-logo-text">Deutsch<em>Daily</em></span>
+        </button>
         <div class="sidebar-tagline">Your daily German practice</div>
       </div>
       <div class="sidebar-divider"></div>
       <nav class="nav-desktop" style="flex:1">
+        <div class="sidebar-section-label">Learn</div>
         <button class="nb on" id="nb-today" onclick="nav('today')"><span class="nb-icon-wrap"><span class="nb-icon">📅</span></span> Today</button>
-        <button class="nb" id="nb-browse" onclick="nav('browse')"><span class="nb-icon-wrap"><span class="nb-icon">📚</span></span> Browse</button>
-        <button class="nb" id="nb-vocab" onclick="nav('vocab')"><span class="nb-icon-wrap"><span class="nb-icon">🗂️</span></span> Vocab</button>
-        <button class="nb" id="nb-grammar" onclick="nav('grammar')"><span class="nb-icon-wrap"><span class="nb-icon">📘</span></span> Grammar</button>
-        <button class="nb" id="nb-frequency" onclick="nav('frequency')"><span class="nb-icon-wrap"><span class="nb-icon">🔤</span></span> Frequency</button>
+        <button class="nb" id="nb-browse" onclick="nav('browse')"><span class="nb-icon-wrap"><span class="nb-icon">💬</span></span> Sentences</button>
+        <button class="nb" id="nb-words" onclick="nav('frequency')"><span class="nb-icon-wrap"><span class="nb-icon">🔤</span></span> Vocabulary</button>
         <button class="nb" id="nb-patterns" onclick="nav('patterns')"><span class="nb-icon-wrap"><span class="nb-icon">🧩</span></span> Patterns</button>
+        <button class="nb" id="nb-grammar" onclick="nav('grammar')"><span class="nb-icon-wrap"><span class="nb-icon">📘</span></span> Grammar</button>
+        <div class="sidebar-section-label">Track</div>
         <button class="nb" id="nb-library" onclick="nav('saved')"><span class="nb-icon-wrap"><span class="nb-icon">📖</span></span> Library</button>
-        <button class="nb" id="nb-history" onclick="nav('history')"><span class="nb-icon-wrap"><span class="nb-icon">🗓️</span></span> History</button>
-        <button class="nb" id="nb-stats" onclick="nav('stats')"><span class="nb-icon-wrap"><span class="nb-icon">📊</span></span> Stats</button>
+        <button class="nb" id="nb-progress" onclick="nav('progress')"><span class="nb-icon-wrap"><span class="nb-icon">📊</span></span> Progress</button>
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-footer-stat">
@@ -48,7 +51,7 @@
             </div>
             <div class="pbar-lbl" id="hpl">0 / 0 sentences learned</div>
           </div>
-          <button class="streak-pill" id="stk" onclick="nav('stats')" type="button">🔥 <span id="stk-n">0</span></button>
+          <button class="streak-pill" id="stk" onclick="nav('progress')" type="button">🔥 <span id="stk-n">0</span></button>
         </div>
       </div>
 
@@ -57,14 +60,12 @@
 
     <nav class="mobile-nav">
       <button class="mnb on" id="mnb-today" onclick="nav('today')"><span class="mnb-icon">📅</span>Today</button>
-      <button class="mnb" id="mnb-browse" onclick="nav('browse')"><span class="mnb-icon">📚</span>Browse</button>
-      <button class="mnb" id="mnb-vocab" onclick="nav('vocab')"><span class="mnb-icon">🗂️</span>Vocab</button>
-      <button class="mnb" id="mnb-grammar" onclick="nav('grammar')"><span class="mnb-icon">📘</span>Grammar</button>
-      <button class="mnb" id="mnb-frequency" onclick="nav('frequency')"><span class="mnb-icon">🔤</span>Freq</button>
+      <button class="mnb" id="mnb-browse" onclick="nav('browse')"><span class="mnb-icon">�</span>Phrases</button>
+      <button class="mnb" id="mnb-words" onclick="nav('frequency')"><span class="mnb-icon">🔤</span>Vocab</button>
       <button class="mnb" id="mnb-patterns" onclick="nav('patterns')"><span class="mnb-icon">🧩</span>Patterns</button>
+      <button class="mnb" id="mnb-grammar" onclick="nav('grammar')"><span class="mnb-icon">📘</span>Grammar</button>
       <button class="mnb" id="mnb-library" onclick="nav('saved')"><span class="mnb-icon">📖</span>Library</button>
-      <button class="mnb" id="mnb-history" onclick="nav('history')"><span class="mnb-icon">🗓️</span>History</button>
-      <button class="mnb" id="mnb-stats" onclick="nav('stats')"><span class="mnb-icon">📊</span>Stats</button>
+      <button class="mnb" id="mnb-progress" onclick="nav('progress')"><span class="mnb-icon">📊</span>Progress</button>
     </nav>
   </div>
 
@@ -82,8 +83,8 @@
   <script src="src/vocab.js?v=vocab-20260525"></script>
   <script src="src/grammar.js?v=grammar-20260604"></script>
   <script src="src/frequency-dictionary-data.js?v=freq-20260623"></script>
-  <script src="src/storage.js?v=freq-20260623"></script>
-  <script src="src/app.js?v=freq-20260623"></script>
+  <script src="src/storage.js?v=vocab-20260623"></script>
+  <script src="src/app.js?v=vocab-20260623"></script>
 </body>
 
 </html>

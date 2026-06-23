@@ -1,7 +1,9 @@
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
-let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: 'a1', grammarLessonId: null, historyDay: null, freqFilter: 'all', freqRange: 'all', freqRevealed: {} };
+let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', vocabPage: 1, grammarModuleId: 'a1', grammarLessonId: null, historyDay: null, progressTab: 'overview', freqFilter: 'all', freqRange: 'all', freqPage: 1, freqRevealed: {} };
+
+const PAGE_SIZE = 50;
 
 // ══════════════════════════════════════════════
 // PATTERN DETECTION FOR SENTENCES
@@ -11,7 +13,8 @@ function findMatchingPattern(sentence) {
   if (explicit) return explicit;
   return null;
 }
-const VALID_VIEWS = new Set(['today', 'browse', 'vocab', 'grammar', 'frequency', 'patterns', 'saved', 'history', 'history-day', 'stats']);
+const VALID_VIEWS = new Set(['today', 'browse', 'vocab', 'grammar', 'frequency', 'patterns', 'saved', 'progress', 'history-day']);
+const VALID_PROGRESS_TABS = new Set(['overview', 'activity']);
 const VALID_FILTERS = new Set(['all', 'unlearned', 'learned', 'favorites']);
 const VALID_VOCAB_FILTERS = new Set(['all', 'new', 'due', 'learned', 'saved']);
 const VALID_FREQ_FILTERS = new Set(['all', 'new', 'due', 'learned', 'saved']);
@@ -36,7 +39,12 @@ const GRAMMAR_MODULE_ALIASES = {
 function normalizeViewName(view) {
   const raw = String(view || 'today');
   if (raw === 'library') return 'saved';
+  if (raw === 'stats' || raw === 'history') return 'progress';
   return VALID_VIEWS.has(raw) ? raw : 'today';
+}
+function normalizeProgressTab(value) {
+  const raw = String(value || 'overview');
+  return VALID_PROGRESS_TABS.has(raw) ? raw : 'overview';
 }
 function normalizePatternFilter(value) {
   const raw = String(value || 'learning');
@@ -55,7 +63,7 @@ function normalizeGrammarLessonId(moduleId, value) {
   return module.lessons[0] ? module.lessons[0].id : null;
 }
 function stateFromUrl(href) {
-  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: DEFAULT_GRAMMAR_MODULE_ID, grammarLessonId: null, historyDay: null, freqFilter: 'all', freqRange: 'all' };
+  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: DEFAULT_GRAMMAR_MODULE_ID, grammarLessonId: null, historyDay: null, progressTab: 'overview', freqFilter: 'all', freqRange: 'all' };
   let params;
   try {
     const base = window.location && window.location.href ? window.location.href : 'http://localhost/';
@@ -95,12 +103,14 @@ function stateFromUrl(href) {
   } else if (view === 'saved') {
     fallback.view = 'saved';
     fallback.libTab = VALID_LIBRARY_TABS.has(tab) ? tab : 'saved';
-  } else if (view === 'history') {
-    fallback.view = day ? 'history-day' : 'history';
-    fallback.historyDay = day;
-  } else if (view === 'history-day') {
-    fallback.view = day ? 'history-day' : 'history';
-    fallback.historyDay = day;
+  } else if (view === 'progress' || view === 'history-day') {
+    if (day) {
+      fallback.view = 'history-day';
+      fallback.historyDay = day;
+    } else {
+      fallback.view = 'progress';
+      fallback.progressTab = normalizeProgressTab(tab || (viewParam === 'history' ? 'activity' : 'overview'));
+    }
   } else {
     fallback.view = view;
   }
@@ -109,7 +119,7 @@ function stateFromUrl(href) {
 function urlFromState(state = V) {
   const params = new URLSearchParams();
   const view = normalizeViewName(state.view);
-  const publicView = view === 'saved' ? 'library' : view === 'history-day' ? 'history' : view;
+  const publicView = view === 'saved' ? 'library' : (view === 'history-day' || view === 'progress') ? 'progress' : view;
   if (publicView !== 'today') params.set('view', publicView);
   if (view === 'browse') {
     if (state.topicId && TOPIC_IDS.has(state.topicId)) params.set('topic', state.topicId);
@@ -130,6 +140,8 @@ function urlFromState(state = V) {
     params.set('filter', normalizePatternFilter(state.patFilter));
   } else if (view === 'saved') {
     if (state.libTab && state.libTab !== 'saved') params.set('tab', state.libTab);
+  } else if (view === 'progress') {
+    if (state.progressTab && state.progressTab !== 'overview') params.set('tab', state.progressTab);
   } else if (view === 'history-day' && state.historyDay) {
     params.set('day', state.historyDay);
   }
@@ -152,6 +164,7 @@ function applyUrlState(href) {
   V.grammarModuleId = next.grammarModuleId;
   V.grammarLessonId = next.grammarLessonId;
   V.historyDay = next.historyDay;
+  V.progressTab = next.progressTab;
 }
 function syncUrl(replace = false) {
   if (!window.history || !window.location) return;
@@ -177,6 +190,8 @@ function nav(view, extra) {
   V.vocabFilter = 'all';
   V.freqFilter = 'all';
   V.freqRange = 'all';
+  V.freqPage = 1;
+  V.vocabPage = 1;
   V.query = '';
   V.historyDay = null;
   if (nextView === 'patterns') V.patFilter = 'learning';
@@ -219,9 +234,8 @@ function render() {
   else if (V.view === 'grammar') root.innerHTML = renderGrammar();
   else if (V.view === 'patterns') root.innerHTML = renderPatterns();
   else if (V.view === 'saved') root.innerHTML = renderSaved();
-  else if (V.view === 'history') root.innerHTML = renderHistory();
+  else if (V.view === 'progress') root.innerHTML = renderProgress();
   else if (V.view === 'history-day') root.innerHTML = renderHistoryDay();
-  else if (V.view === 'stats') { root.innerHTML = renderStats(); }
   root.querySelectorAll('.sc,.pc,.vc,.grammar-card').forEach((el, i) => el.style.animationDelay = i * 25 + 'ms');
 }
 
@@ -232,20 +246,26 @@ function updateHeader() {
   document.getElementById('stk-n').textContent = DB.streak;
 }
 function updateNavBtns() {
-  ['today', 'browse', 'vocab', 'grammar', 'frequency', 'patterns', 'stats'].forEach(v => {
+  ['today', 'browse', 'grammar', 'patterns'].forEach(v => {
     const el = document.getElementById('nb-' + v);
     if (el) el.className = 'nb' + (V.view === v ? ' on' : '');
     const mel = document.getElementById('mnb-' + v);
     if (mel) mel.className = 'mnb' + (V.view === v ? ' on' : '');
   });
+  const wordsActive = V.view === 'vocab' || V.view === 'frequency';
+  const wordsBtn = document.getElementById('nb-words');
+  if (wordsBtn) wordsBtn.className = 'nb' + (wordsActive ? ' on' : '');
+  const mWordsBtn = document.getElementById('mnb-words');
+  if (mWordsBtn) mWordsBtn.className = 'mnb' + (wordsActive ? ' on' : '');
   const libBtn = document.getElementById('nb-library');
   if (libBtn) libBtn.className = 'nb' + (V.view === 'saved' ? ' on' : '');
   const mLibBtn = document.getElementById('mnb-library');
   if (mLibBtn) mLibBtn.className = 'mnb' + (V.view === 'saved' ? ' on' : '');
-  const histBtn = document.getElementById('nb-history');
-  if (histBtn) histBtn.className = 'nb' + (V.view === 'history' || V.view === 'history-day' ? ' on' : '');
-  const mHistBtn = document.getElementById('mnb-history');
-  if (mHistBtn) mHistBtn.className = 'mnb' + (V.view === 'history' || V.view === 'history-day' ? ' on' : '');
+  const progressActive = V.view === 'progress' || V.view === 'history-day';
+  const progBtn = document.getElementById('nb-progress');
+  if (progBtn) progBtn.className = 'nb' + (progressActive ? ' on' : '');
+  const mProgBtn = document.getElementById('mnb-progress');
+  if (mProgBtn) mProgBtn.className = 'mnb' + (progressActive ? ' on' : '');
   const sc = document.getElementById('sb-learned-count');
   if (sc) sc.textContent = DB.learned.size;
 }
@@ -312,7 +332,7 @@ function renderBrowse() {
 </button>`;
   }).join('');
   return `<div style="padding-top:14px">
-	<h2 class="page-title">Browse</h2>
+	<h2 class="page-title">Sentences</h2>
 	<p class="page-sub">${SENTENCES.length} sentences - ${PATTERNS.length} patterns - ${TOPICS.length} topics</p>
 	<div class="search-wrap" style="margin:0 0 16px"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search all phrases, topics, and patterns..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
 	${V.query ? `<div class="sec-lbl">Search Results (${searchResults.length})</div>${searchResults.length ? searchResults.map((s, i) => renderSentenceCard(s, i, true)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No phrases match.</div>`}` : ''}
@@ -386,6 +406,19 @@ function vocabCardsForView() {
       .some(value => String(value).toLowerCase().includes(q));
   }).sort((a, b) => a.priority - b.priority);
 }
+function renderLoadMore(shown, total, action) {
+  if (total <= shown) return '';
+  const remaining = total - shown;
+  const next = Math.min(remaining, PAGE_SIZE);
+  return `<div class="load-more-wrap">
+    <span class="load-more-info">Showing ${shown} of ${total}</span>
+    <button class="load-more-btn" onclick="${action}" type="button">Load ${next} more</button>
+  </div>`;
+}
+
+function loadMoreFreq() { V.freqPage = (V.freqPage || 1) + 1; render(); }
+function loadMoreVocab() { V.vocabPage = (V.vocabPage || 1) + 1; render(); }
+
 function renderVocab() {
   ensureVocabDailyQueue();
   const dueIds = getVocabReviewIds();
@@ -423,8 +456,8 @@ function renderVocab() {
     : `${V.vocabFilter.charAt(0).toUpperCase() + V.vocabFilter.slice(1)} Cards (${visibleCards.length})`;
 
   return `<div style="padding-top:14px">
-<h2 class="page-title">Vocab</h2>
-<p class="page-sub">500 curated daily-life German cards with article, gender, plural, example, and SRS review.</p>
+<h2 class="page-title">Vocabulary</h2>
+<p class="page-sub">Build your German vocabulary with spaced repetition.</p>
 ${dueSection}
 
 <div class="goal-card vocab-goal-card">
@@ -460,7 +493,7 @@ ${queueCards.length ? `<div class="sec-lbl">Today's New / Due Queue</div>${queue
   ${['all', 'new', 'due', 'learned', 'saved'].map(f => `<button class="filter-chip${V.vocabFilter === f ? ' on' : ''}" onclick="setVocabFilter('${f}')" aria-pressed="${V.vocabFilter === f}" type="button">${f === 'all' ? 'All' : f === 'new' ? 'New' : f === 'due' ? 'Due' : f === 'learned' ? '✓ Learned' : '⭐ Saved'}</button>`).join('')}
 </div>
 <div class="sec-lbl">${cardsTitle}</div>
-${visibleCards.length ? visibleCards.map((card, i) => renderVocabCard(card, i)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No vocab cards match.</div>`}
+${visibleCards.length ? visibleCards.slice(0, (V.vocabPage || 1) * PAGE_SIZE).map((card, i) => renderVocabCard(card, i)).join('') + renderLoadMore(Math.min(visibleCards.length, (V.vocabPage || 1) * PAGE_SIZE), visibleCards.length, 'loadMoreVocab()') : `<div class="empty-state"><div class="empty-icon">🔍</div>No vocab cards match.</div>`}
   </div>`;
 }
 function renderVocabCard(card, i) {
@@ -572,8 +605,8 @@ function renderFrequency() {
     : `Rank ${esc(V.freqRange)} (${visibleEntries.length})`;
 
   return `<div style="padding-top:14px">
-<h2 class="page-title">Frequency Dictionary</h2>
-<p class="page-sub">2,525 most common German words from the parsed frequency dictionary, with example sentences and SRS review.</p>
+<h2 class="page-title">Vocabulary</h2>
+<p class="page-sub">The 2,525 most common German words, ranked by frequency — with example sentences and spaced review.</p>
 ${dueSection}
 
 <div class="goal-card vocab-goal-card">
@@ -616,7 +649,7 @@ ${queueEntries.length ? `<details class="freq-queue-preview" open>
   <div class="sec-lbl freq-browse-results-lbl">${cardsTitle}</div>
   ${visibleEntries.length ? `<button class="act-btn vocab-visible-practice" onclick="startFrequencyPractice({ids:${visibleIdsJson},skipSessionFilter:true})">🎯 Practice These</button>` : ''}
 </div>
-${visibleEntries.length ? visibleEntries.map((e, i) => renderFreqCard(e, i)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No frequency cards match.</div>`}
+${visibleEntries.length ? visibleEntries.slice(0, (V.freqPage || 1) * PAGE_SIZE).map((e, i) => renderFreqCard(e, i)).join('') + renderLoadMore(Math.min(visibleEntries.length, (V.freqPage || 1) * PAGE_SIZE), visibleEntries.length, 'loadMoreFreq()') : `<div class="empty-state"><div class="empty-icon">🔍</div>No frequency cards match.</div>`}
 </div>
   </div>`;
 }
@@ -679,10 +712,12 @@ function toggleFreqReveal(id) {
 }
 function setFreqFilter(filter) {
   V.freqFilter = VALID_FREQ_FILTERS.has(filter) ? filter : 'all';
+  V.freqPage = 1;
   commitState();
 }
 function setFreqRange(range) {
   V.freqRange = VALID_FREQ_RANGES.has(range) ? range : 'all';
+  V.freqPage = 1;
   commitState();
 }
 function setFreqGoal(n) {
@@ -1575,7 +1610,7 @@ function reviewForecast(days = 7) {
     return { key, count, label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : parseDateKey(key).toLocaleDateString('en-DE', { weekday: 'short' }) };
   });
 }
-function renderStats() {
+function renderProgressOverview() {
   const tot = SENTENCES.length, done = DB.learned.size, fav = DB.favorites.size, und = DB.understood.size;
   const completion = pct(done, tot);
   const lvColors = { A1: '#16A34A', A2: '#D97706' };
@@ -1636,9 +1671,7 @@ ${histRows.map(r => {
   const forecastChart = `<div class="stats-chart-title"><strong>Review Forecast</strong><span>Next 7 days of scheduled sentence reviews</span></div>
   <div class="forecast-row">${forecast.map(r => `<div class="forecast-day"><div class="forecast-count">${r.count}</div><div class="forecast-bar"><span style="height:${Math.max(8, Math.round(r.count / maxForecast * 100))}%"></span></div><div class="forecast-label">${r.label}</div></div>`).join('')}</div>`;
 
-  return `<div style="padding-top:14px">
-<h2 class="page-title">Statistics</h2>
-<p class="page-sub">Progress, recall quality, and what needs attention next</p>
+  return `<div class="progress-body">
 <div class="stats-grid">
   <div class="stat-box"><div class="stat-lbl">Sentences Learned</div><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-sub">of ${tot} sentences</div></div>
   <div class="stat-box"><div class="stat-lbl">Completion</div><div class="stat-num" style="color:var(--accent)">${completion}%</div><div class="stat-sub">overall progress</div></div>
@@ -1809,9 +1842,10 @@ function toggleUnderstood(id) {
 }
 
 function setFilter(f) { V.filter = VALID_FILTERS.has(f) ? f : 'all'; commitState(); }
-function setVocabFilter(f) { V.vocabFilter = VALID_VOCAB_FILTERS.has(f) ? f : 'all'; commitState(); }
+function setVocabFilter(f) { V.vocabFilter = VALID_VOCAB_FILTERS.has(f) ? f : 'all'; V.vocabPage = 1; commitState(); }
 function setVocabTopic(topicId) {
   V.vocabTopicId = topicId && VOCAB_TOPIC_IDS.has(topicId) ? topicId : null;
+  V.vocabPage = 1;
   commitState();
 }
 function setVocabGoal(n) {
@@ -1820,7 +1854,7 @@ function setVocabGoal(n) {
   save();
   commitState();
 }
-function setQuery(q) { V.query = q; clearTimeout(window._qt); window._qt = setTimeout(render, 300); }
+function setQuery(q) { V.query = q; V.freqPage = 1; V.vocabPage = 1; clearTimeout(window._qt); window._qt = setTimeout(render, 300); }
 function refreshQueue() { DB.dailyQueueDate = null; save(); nav('today'); }
 function refreshVocabQueue() { DB.vocabDailyQueueDate = null; save(); nav('vocab'); }
 
@@ -3527,11 +3561,36 @@ function renderHistoryPatternRows(day) {
 
 function navHistoryDay(dateKey) {
   V.historyDay = normalizeDateKey(dateKey);
-  V.view = V.historyDay ? 'history-day' : 'history';
+  V.view = V.historyDay ? 'history-day' : 'progress';
   commitState({ scroll: true });
 }
 
-function renderHistory() {
+function backToActivity() {
+  V.historyDay = null;
+  V.progressTab = 'activity';
+  V.view = 'progress';
+  commitState({ scroll: true });
+}
+
+function setProgressTab(tab) {
+  V.progressTab = normalizeProgressTab(tab);
+  commitState({ scroll: false });
+}
+
+function renderProgress() {
+  const tab = normalizeProgressTab(V.progressTab);
+  return `<div style="padding-top:14px">
+    <h2 class="page-title">Progress</h2>
+    <p class="page-sub">Stats, streaks, and your day-by-day learning history in one place</p>
+    <div class="progress-tabs" role="tablist" aria-label="Progress sections">
+      <button class="progress-tab${tab === 'overview' ? ' on' : ''}" role="tab" aria-selected="${tab === 'overview'}" onclick="setProgressTab('overview')" type="button">📊 Overview</button>
+      <button class="progress-tab${tab === 'activity' ? ' on' : ''}" role="tab" aria-selected="${tab === 'activity'}" onclick="setProgressTab('activity')" type="button">🗓️ Activity</button>
+    </div>
+    ${tab === 'activity' ? renderProgressActivity() : renderProgressOverview()}
+  </div>`;
+}
+
+function renderProgressActivity() {
   const days = getHistoryDays(30);
   const activeDays = days.filter(d => d.activityCount > 0).length;
   const totalNew = days.reduce((acc, d) => acc + d.sentenceIds.length, 0);
@@ -3544,10 +3603,6 @@ function renderHistory() {
 
   return `<div class="history-page">
     <div class="history-head">
-      <div>
-        <h2 class="page-title">History</h2>
-        <p class="page-sub">Your last 30 days of learning, reviews, misses, and topic focus</p>
-      </div>
       <div class="history-headline-stat"><strong>${thisWeekTotal}</strong><span>actions this week</span></div>
     </div>
     ${renderHistoryQuickActions()}
@@ -3566,7 +3621,7 @@ function renderHistory() {
 
 function renderHistoryDay() {
   const key = normalizeDateKey(V.historyDay);
-  if (!key) return renderHistory();
+  if (!key) { V.progressTab = 'activity'; return renderProgress(); }
 
   const day = getHistoryDaySummary(key);
   const sents = day.sentenceIds.map(id => historySentence(id)).filter(Boolean);
@@ -3593,12 +3648,12 @@ function renderHistoryDay() {
   </div>`;
 
   if (!hasActivity) {
-    return `<button class="back-btn" onclick="nav('history')">← History</button>
+    return `<button class="back-btn" onclick="backToActivity()">← Progress</button>
       ${hero}
       <div class="empty-state"><div class="empty-icon">📭</div>No activity recorded for this day.</div>`;
   }
 
-  return `<button class="back-btn" onclick="nav('history')">← History</button>
+  return `<button class="back-btn" onclick="backToActivity()">← Progress</button>
     ${hero}
     ${dayActions ? `<div class="history-day-actions">${dayActions}</div>` : ''}
     ${renderHistoryPracticeRows(day)}
