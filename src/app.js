@@ -598,18 +598,26 @@ ${dueSection}
 <div class="vocab-action-row">
   ${queueEntries.length ? `<button class="learned-practice-btn" onclick="startFrequencyPractice({ids:${queueIdsJson}})">🎯 Practice Today's ${queueEntries.length}</button>` : ''}
   ${dueEntries.length ? `<button class="review-practice-btn" onclick="startFrequencyPractice({ids:${dueIdsJson},isSRS:true})">🔁 Practice Due ${dueEntries.length}</button>` : ''}
-  ${visibleEntries.length ? `<button class="act-btn vocab-visible-practice" onclick="startFrequencyPractice({ids:${visibleIdsJson},skipSessionFilter:true})">Practice Visible</button>` : ''}
 </div>
 
-${queueEntries.length ? `<div class="sec-lbl">Today's New / Due Queue</div>${queueEntries.map((e, i) => renderFreqCard(e, i)).join('')}` : ''}
+${queueEntries.length ? `<details class="freq-queue-preview" open>
+  <summary class="freq-queue-summary"><span class="sec-lbl freq-queue-lbl">Today's New / Due Queue</span><span class="freq-queue-toggle">Show words</span></summary>
+  <div class="freq-chip-row">${queueEntries.map(e => `<button class="freq-chip" onclick="startFrequencyPractice({ids:['${String(e.rank)}'],skipSessionFilter:true})" type="button"><span class="freq-chip-rank">#${e.rank}</span> <span lang="de">${esc(freqDisplay(e))}</span></button>`).join('')}</div>
+</details>` : ''}
 
-<div class="search-wrap" style="margin:16px 0"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search German word, English meaning, or sentence..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
+<div class="freq-browse-section">
+<div class="sec-lbl freq-browse-lbl">📚 Browse Dictionary</div>
+<div class="search-wrap" style="margin:12px 0"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search German word, English meaning, or sentence..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
 <div class="filter-row vocab-topic-row">${rangeChips}</div>
 <div class="filter-row">
   ${['all', 'new', 'due', 'learned', 'saved'].map(f => `<button class="filter-chip${V.freqFilter === f ? ' on' : ''}" onclick="setFreqFilter('${f}')" aria-pressed="${V.freqFilter === f}" type="button">${f === 'all' ? 'All' : f === 'new' ? 'New' : f === 'due' ? 'Due' : f === 'learned' ? '✓ Learned' : '⭐ Saved'}</button>`).join('')}
 </div>
-<div class="sec-lbl">${cardsTitle}</div>
+<div class="freq-browse-hdr">
+  <div class="sec-lbl freq-browse-results-lbl">${cardsTitle}</div>
+  ${visibleEntries.length ? `<button class="act-btn vocab-visible-practice" onclick="startFrequencyPractice({ids:${visibleIdsJson},skipSessionFilter:true})">🎯 Practice These</button>` : ''}
+</div>
 ${visibleEntries.length ? visibleEntries.map((e, i) => renderFreqCard(e, i)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No frequency cards match.</div>`}
+</div>
   </div>`;
 }
 function renderFreqCard(entry, i) {
@@ -2670,7 +2678,7 @@ function startFrequencyPractice(opts) {
   P.active = false;
   PP.active = false;
   VP.active = false;
-  FP = { active: true, queue: shuffle([...entries]), idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS, answered: {}, missedIds: [] };
+  FP = { active: true, queue: [...entries], idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS, answered: {}, missedIds: [] };
   renderFrequencyPractice();
 }
 function renderFrequencyPractice() {

@@ -1306,6 +1306,104 @@
 /* ══════════════════════════════════════════════
    FREQUENCY DICTIONARY
    ══════════════════════════════════════════════ */
+.freq-queue-preview {
+  margin: 4px 0 8px;
+}
+
+.freq-queue-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+}
+
+.freq-queue-summary::-webkit-details-marker {
+  display: none;
+}
+
+.freq-queue-lbl {
+  border-top: none;
+  padding: 12px 0 8px;
+  margin-top: 0;
+}
+
+.freq-queue-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.freq-queue-preview[open] .freq-queue-toggle::after {
+  content: ' ▲';
+}
+
+.freq-queue-preview:not([open]) .freq-queue-toggle::after {
+  content: ' ▼';
+}
+
+.freq-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.freq-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--white);
+  border: 0.5px solid var(--border);
+  border-radius: 99px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.freq-chip:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.freq-chip-rank {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.freq-browse-section {
+  border-top: 0.5px solid var(--border);
+  margin-top: 12px;
+}
+
+.freq-browse-lbl {
+  border-top: none;
+  color: var(--text);
+  font-size: 15px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+  padding: 16px 0 4px;
+}
+
+.freq-browse-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.freq-browse-results-lbl {
+  border-top: none;
+  padding-top: 16px;
+}
+
 .freq-card .vocab-term {
   font-size: 28px;
   margin-bottom: 4px;

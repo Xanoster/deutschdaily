@@ -881,7 +881,8 @@ function toggleFreqFav(id) {
 }
 function getNewFreqPool() {
   if (typeof FREQUENCY_DICTIONARY === 'undefined') return [];
-  return shuffle(FREQUENCY_DICTIONARY.filter(e => !DB.freqLearned.has(String(e.rank)) && !isFreqScheduledFuture(String(e.rank))));
+  return FREQUENCY_DICTIONARY.filter(e => !DB.freqLearned.has(String(e.rank)) && !isFreqScheduledFuture(String(e.rank)))
+    .sort((a, b) => a.rank - b.rank);
 }
 function ensureFreqDailyQueue() {
   const t = today();
@@ -890,7 +891,7 @@ function ensureFreqDailyQueue() {
     DB.freqDailyQueueDone = new Set();
   }
   const dueIds = getFreqReviewIds();
-  const due = shuffle(dueIds.map(id => freqById(id)).filter(Boolean));
+  const due = dueIds.map(id => freqById(id)).filter(Boolean).sort((a, b) => a.rank - b.rank);
   const newPool = getNewFreqPool();
   const queue = [...due, ...newPool.filter(e => !dueIds.includes(String(e.rank)))].slice(0, DB.freqDailyGoal);
   DB.freqDailyQueue = queue.map(e => String(e.rank));
