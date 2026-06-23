@@ -5,9 +5,10 @@ const SKEY = 'dd_v4';
 const SKEY_OLD = 'dd_clean_v1';
 const SKEY_BACKUP = 'dd_v4_backup';
 const SKEY_RECOVERY = 'dd_v4_recovery';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 const FIRST_REVIEW_DAYS = 3;
 const DEFAULT_VOCAB_DAILY_GOAL = 10;
+const DEFAULT_FREQ_DAILY_GOAL = 10;
 const DEFAULT_SETTINGS = {
   externalTts: true,
 };
@@ -36,6 +37,14 @@ let DB = {
   vocabDailyQueue: [],
   vocabDailyQueueDate: null,
   vocabDailyQueueDone: new Set(),
+  freqLearned: new Set(),
+  freqFavorites: new Set(),
+  freqSrs: {},
+  freqAttempts: [],
+  freqDailyGoal: DEFAULT_FREQ_DAILY_GOAL,
+  freqDailyQueue: [],
+  freqDailyQueueDate: null,
+  freqDailyQueueDone: new Set(),
   grammarStudied: new Set(),
   grammarScores: {},
   attempts: [],
@@ -47,6 +56,7 @@ function validSentenceIdSet() { return new Set(SENTENCES.map(s => s.id)); }
 function validPatternIdSet() { return new Set(PATTERNS.map(p => p.id)); }
 function validVocabIdSet() { return new Set(VOCAB_CARDS.map(v => v.id)); }
 function validGrammarLessonIdSet() { return new Set(GRAMMAR_LESSONS.map(lesson => lesson.id)); }
+function validFrequencyRankSet() { return new Set((typeof FREQUENCY_DICTIONARY !== 'undefined' ? FREQUENCY_DICTIONARY : []).map(e => String(e.rank))); }
 
 function dateKey(date = new Date()) {
   const d = new Date(date);
@@ -197,6 +207,20 @@ function normalizeVocabAttempts(value, validIds) {
     };
   }).filter(Boolean);
 }
+function normalizeFrequencyAttempts(value, validIds) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-1000).map(raw => {
+    if (!raw || typeof raw !== 'object' || !validIds.has(String(raw.id))) return null;
+    return {
+      id: String(raw.id),
+      date: normalizeDateKey(raw.date) || today(),
+      result: ['again', 'hard', 'good', 'easy', 'manual'].includes(raw.result) ? raw.result : 'again',
+      wasDue: Boolean(raw.wasDue),
+      intervalBefore: clampNumber(raw.intervalBefore, 0, 3650, 0),
+      intervalAfter: clampNumber(raw.intervalAfter, 0, 3650, 0),
+    };
+  }).filter(Boolean);
+}
 function normalizeGrammarScores(value, validIds) {
   const out = {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
@@ -223,11 +247,13 @@ function normalizeDb(raw = {}) {
   const validPatternIds = validPatternIdSet();
   const validVocabIds = validVocabIdSet();
   const validGrammarLessonIds = validGrammarLessonIdSet();
+  const validFreqIds = validFrequencyRankSet();
   const safe = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const learned = uniqueValidIds(safe.learned, validSentenceIds);
   const historyWords = normalizeHistoryWords(safe.historyWords, validSentenceIds);
   const dailyLearned = uniqueValidIds(safe.dailyLearned, validSentenceIds);
   const vocabDailyQueueDate = normalizeDateKey(safe.vocabDailyQueueDate);
+  const freqDailyQueueDate = normalizeDateKey(safe.freqDailyQueueDate);
 
   learned.forEach(id => {
     const alreadyTracked = Object.values(historyWords).some(ids => ids.includes(id));
@@ -266,6 +292,14 @@ function normalizeDb(raw = {}) {
     vocabDailyQueue: uniqueValidIds(safe.vocabDailyQueue, validVocabIds),
     vocabDailyQueueDate,
     vocabDailyQueueDone: new Set(vocabDailyQueueDate === todayK ? uniqueValidIds(safe.vocabDailyQueueDone, validVocabIds) : []),
+    freqLearned: new Set(uniqueValidIds(safe.freqLearned, validFreqIds)),
+    freqFavorites: new Set(uniqueValidIds(safe.freqFavorites, validFreqIds)),
+    freqSrs: normalizeSrs(safe.freqSrs, validFreqIds),
+    freqAttempts: normalizeFrequencyAttempts(safe.freqAttempts, validFreqIds),
+    freqDailyGoal: clampNumber(safe.freqDailyGoal, 1, 50, DEFAULT_FREQ_DAILY_GOAL),
+    freqDailyQueue: uniqueValidIds(safe.freqDailyQueue, validFreqIds),
+    freqDailyQueueDate,
+    freqDailyQueueDone: new Set(freqDailyQueueDate === todayK ? uniqueValidIds(safe.freqDailyQueueDone, validFreqIds) : []),
     grammarStudied: new Set(uniqueValidIds(safe.grammarStudied, validGrammarLessonIds)),
     grammarScores: normalizeGrammarScores(safe.grammarScores, validGrammarLessonIds),
     attempts: normalizeAttempts(safe.attempts, validSentenceIds),
@@ -287,6 +321,12 @@ function normalizeDb(raw = {}) {
   });
   normalized.vocabLearned.forEach(id => {
     if (!normalized.vocabSrs[id]) normalized.vocabSrs[id] = initialSrsState();
+  });
+  Object.keys(normalized.freqSrs).forEach(id => {
+    if (!normalized.freqLearned.has(id)) delete normalized.freqSrs[id];
+  });
+  normalized.freqLearned.forEach(id => {
+    if (!normalized.freqSrs[id]) normalized.freqSrs[id] = initialSrsState();
   });
   return normalized;
 }
@@ -316,6 +356,14 @@ function dbToObj() {
     vocabDailyQueue: DB.vocabDailyQueue,
     vocabDailyQueueDate: DB.vocabDailyQueueDate,
     vocabDailyQueueDone: [...DB.vocabDailyQueueDone],
+    freqLearned: [...DB.freqLearned],
+    freqFavorites: [...DB.freqFavorites],
+    freqSrs: DB.freqSrs,
+    freqAttempts: DB.freqAttempts,
+    freqDailyGoal: DB.freqDailyGoal,
+    freqDailyQueue: DB.freqDailyQueue,
+    freqDailyQueueDate: DB.freqDailyQueueDate,
+    freqDailyQueueDone: [...DB.freqDailyQueueDone],
     grammarStudied: [...DB.grammarStudied],
     grammarScores: DB.grammarScores,
     attempts: DB.attempts,
@@ -735,5 +783,117 @@ function ensureVocabDailyQueue() {
   const queue = [...due, ...newPool.filter(card => !dueIds.includes(card.id))].slice(0, DB.vocabDailyGoal);
   DB.vocabDailyQueue = queue.map(card => card.id);
   DB.vocabDailyQueueDate = t;
+  save();
+}
+
+// ══════════════════════════════════════════════
+// FREQUENCY DICTIONARY SRS
+// ══════════════════════════════════════════════
+function freqById(id) {
+  if (typeof FREQUENCY_DICTIONARY === 'undefined') return null;
+  return FREQUENCY_DICTIONARY.find(e => String(e.rank) === String(id)) || null;
+}
+function freqSrsNextLabel(id) {
+  return srsNextLabelForData(DB.freqSrs[id]);
+}
+function getFreqReviewIds() {
+  const td = today();
+  return Object.entries(DB.freqSrs)
+    .filter(([id, data]) => DB.freqLearned.has(id) && data.nextReview && data.nextReview <= td)
+    .map(([id]) => id);
+}
+function getFreqSrsLevel(id) { return (DB.freqSrs[id] || {}).level || 0; }
+function isFreqScheduledFuture(id) {
+  const srs = DB.freqSrs[id];
+  return Boolean(srs && srs.nextReview && srs.nextReview > today());
+}
+function recordFreqAttempt({ id, result, intervalBefore = 0, intervalAfter = 0, wasDue = false }) {
+  if (!validFrequencyRankSet().has(String(id))) return;
+  DB.freqAttempts.push({ id: String(id), date: today(), result, wasDue, intervalBefore, intervalAfter });
+  if (DB.freqAttempts.length > 1000) DB.freqAttempts = DB.freqAttempts.slice(-1000);
+}
+function freqRatingInterval(card, rating, isNew) {
+  const before = card.interval || 0;
+  if (isNew) {
+    if (rating === 'hard') return 1;
+    if (rating === 'easy') return 5;
+    if (rating === 'good') return FIRST_REVIEW_DAYS;
+    return 0;
+  }
+  if (rating === 'again') return 1;
+  if (rating === 'hard') return Math.max(1, Math.round(Math.max(before, 1) * 1.2));
+  const good = Math.max(FIRST_REVIEW_DAYS, Math.round(Math.max(before, 1) * card.ease));
+  if (rating === 'easy') return Math.min(3650, Math.round(good * 1.3));
+  return good;
+}
+function scheduleFreq(id, rating) {
+  if (!validFrequencyRankSet().has(String(id))) return { intervalBefore: 0, intervalAfter: 0, wasDue: false, learned: false };
+  const safeRating = ['again', 'hard', 'good', 'easy'].includes(rating) ? rating : 'again';
+  const isNew = !DB.freqLearned.has(String(id)) || !DB.freqSrs[String(id)];
+  const card = DB.freqSrs[String(id)] || blankVocabSrsState();
+  const before = card.interval || 0;
+  const wasDue = Boolean(card.nextReview && card.nextReview <= today());
+
+  if (isNew && safeRating === 'again') {
+    return { intervalBefore: before, intervalAfter: 0, wasDue: false, learned: false };
+  }
+
+  card.ease = clampNumber(card.ease, 1.3, 5, 2.5);
+  card.interval = freqRatingInterval(card, safeRating, isNew);
+  if (!isNew && safeRating === 'again') card.ease = Math.max(1.3, card.ease - 0.2);
+  if (!isNew && safeRating === 'easy') card.ease = Math.min(5, card.ease + 0.15);
+  card.level = srsLevelFromInterval(card.interval);
+  card.lastReview = today();
+  card.nextReview = addDaysKey(card.interval);
+  DB.freqLearned.add(String(id));
+  DB.freqDailyQueueDone.add(String(id));
+  DB.freqSrs[String(id)] = card;
+  recordStudy();
+  return { intervalBefore: before, intervalAfter: card.interval, wasDue, learned: true };
+}
+function markFreqLearned(id, source = 'manual') {
+  if (!validFrequencyRankSet().has(String(id))) return false;
+  const scheduled = scheduleFreq(id, 'good');
+  if (source === 'manual') {
+    recordFreqAttempt({ id, result: 'manual', intervalBefore: scheduled.intervalBefore, intervalAfter: scheduled.intervalAfter, wasDue: scheduled.wasDue });
+  }
+  save();
+  return true;
+}
+function unmarkFreqLearned(id) {
+  DB.freqLearned.delete(String(id));
+  DB.freqDailyQueueDone.delete(String(id));
+  delete DB.freqSrs[String(id)];
+  save();
+}
+function toggleFreqLearned(id) {
+  if (DB.freqLearned.has(String(id))) {
+    unmarkFreqLearned(id);
+  } else {
+    markFreqLearned(id, 'manual');
+  }
+}
+function toggleFreqFav(id) {
+  const sid = String(id);
+  if (DB.freqFavorites.has(sid)) DB.freqFavorites.delete(sid);
+  else DB.freqFavorites.add(sid);
+  save();
+}
+function getNewFreqPool() {
+  if (typeof FREQUENCY_DICTIONARY === 'undefined') return [];
+  return shuffle(FREQUENCY_DICTIONARY.filter(e => !DB.freqLearned.has(String(e.rank)) && !isFreqScheduledFuture(String(e.rank))));
+}
+function ensureFreqDailyQueue() {
+  const t = today();
+  if (DB.freqDailyQueueDate === t && DB.freqDailyQueue.length > 0) return;
+  if (DB.freqDailyQueueDate !== t) {
+    DB.freqDailyQueueDone = new Set();
+  }
+  const dueIds = getFreqReviewIds();
+  const due = shuffle(dueIds.map(id => freqById(id)).filter(Boolean));
+  const newPool = getNewFreqPool();
+  const queue = [...due, ...newPool.filter(e => !dueIds.includes(String(e.rank)))].slice(0, DB.freqDailyGoal);
+  DB.freqDailyQueue = queue.map(e => String(e.rank));
+  DB.freqDailyQueueDate = t;
   save();
 }

@@ -11,6 +11,7 @@ const expectedScripts = [
   'src/learning.js',
   'src/vocab.js',
   'src/grammar.js',
+  'src/frequency-dictionary-data.js',
   'src/storage.js',
   'src/app.js'
 ];
@@ -71,14 +72,15 @@ const source = [
   read('src/learning.js'),
   read('src/vocab.js'),
   read('src/grammar.js'),
-  'globalThis.__dd = { TOPICS, PAT_CATS, PATTERNS, PATTERN_BY_ID, SENTENCE_SEEDS, SENTENCES, VOCAB_TOPICS, VOCAB_SOURCE_REFS, VOCAB_CARDS, GRAMMAR_MODULES, GRAMMAR_LESSONS };'
+  read('src/frequency-dictionary-data.js'),
+  'globalThis.__dd = { TOPICS, PAT_CATS, PATTERNS, PATTERN_BY_ID, SENTENCE_SEEDS, SENTENCES, VOCAB_TOPICS, VOCAB_SOURCE_REFS, VOCAB_CARDS, GRAMMAR_MODULES, GRAMMAR_LESSONS, FREQUENCY_DICTIONARY };'
 ].join('\n');
 
 const sandbox = { console };
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox, { filename: 'validate-content.vm.js' });
 
-const { TOPICS, PAT_CATS, PATTERNS, SENTENCE_SEEDS, SENTENCES, VOCAB_TOPICS, VOCAB_SOURCE_REFS, VOCAB_CARDS, GRAMMAR_MODULES, GRAMMAR_LESSONS } = sandbox.__dd;
+const { TOPICS, PAT_CATS, PATTERNS, SENTENCE_SEEDS, SENTENCES, VOCAB_TOPICS, VOCAB_SOURCE_REFS, VOCAB_CARDS, GRAMMAR_MODULES, GRAMMAR_LESSONS, FREQUENCY_DICTIONARY } = sandbox.__dd;
 const topicIds = new Set(TOPICS.map(t => t.id));
 const catIds = new Set(PAT_CATS.map(c => c.id));
 const allPatternIds = new Set(PATTERNS.map(p => p.id));
@@ -229,6 +231,32 @@ for (const module of GRAMMAR_MODULES) {
     record(new Set((lesson.examples || []).map(example => uniqueNormalized(example.de))).size === lesson.examples.length, `${lesson.id} needs unique German examples for exercises`);
     record(new Set((lesson.examples || []).map(example => uniqueNormalized(example.en))).size === lesson.examples.length, `${lesson.id} needs unique English examples for exercises`);
   }
+}
+
+// ─── Frequency Dictionary ─────────────────────
+record(Array.isArray(FREQUENCY_DICTIONARY), 'FREQUENCY_DICTIONARY must be an array');
+record(FREQUENCY_DICTIONARY.length === 2525, `FREQUENCY_DICTIONARY expected 2525 entries, found ${FREQUENCY_DICTIONARY.length}`);
+
+const freqRanks = new Set();
+for (const entry of FREQUENCY_DICTIONARY) {
+  const rank = entry.rank;
+  if (freqRanks.has(rank)) errors.push(`frequency dictionary duplicate rank ${rank}`);
+  freqRanks.add(rank);
+
+  for (const key of ['german', 'english', 'germanSentence', 'englishSentence']) {
+    record(Boolean(entry[key]), `frequency rank ${rank} missing ${key}`);
+  }
+
+  record(rank >= 1 && rank <= 2525, `frequency rank ${rank} out of range`);
+  record(typeof entry.german === 'string' && entry.german.trim().length > 0, `frequency rank ${rank} empty or non-string german`);
+  record(typeof entry.english === 'string' && entry.english.trim().length > 0, `frequency rank ${rank} empty or non-string english`);
+  record(typeof entry.germanSentence === 'string' && entry.germanSentence.trim().length > 0, `frequency rank ${rank} empty german sentence`);
+  record(typeof entry.englishSentence === 'string' && entry.englishSentence.trim().length > 0, `frequency rank ${rank} empty english sentence`);
+}
+
+const sortedRanks = [...freqRanks].sort((a, b) => a - b);
+for (let i = 1; i <= 2525; i++) {
+  if (!freqRanks.has(i)) errors.push(`frequency dictionary missing rank ${i}`);
 }
 
 const sentencePatternContracts = [

@@ -1302,3 +1302,94 @@
     grid-column: 1;
   }
 }
+
+/* ══════════════════════════════════════════════
+   FREQUENCY DICTIONARY
+   ══════════════════════════════════════════════ */
+.freq-card .vocab-term {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.freq-sentence {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 10px 0 6px;
+  padding: 12px 14px;
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
+  border-radius: 10px;
+}
+
+.freq-sentence strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.freq-en-word {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.freq-en-sentence {
+  display: block;
+  font-size: 14px;
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.freq-ipa {
+  font-size: 14px;
+  color: var(--text-3);
+  font-family: 'Georgia', serif;
+  margin-top: 6px;
+}
+
+.freq-practice-card {
+  text-align: center;
+}
+
+.freq-practice-word {
+  font-size: 38px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.freq-practice-sentence {
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-border);
+  border-radius: 12px;
+}
+
+.freq-practice-sentence strong {
+  color: var(--accent);
+}
+
+.freq-practice-en {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .freq-practice-word {
+    font-size: 30px;
+  }
+
+  .freq-practice-sentence {
+    font-size: 17px;
+  }
+
+  .freq-practice-en {
+    font-size: 18px;
+  }
+}

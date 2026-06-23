@@ -7,6 +7,7 @@ DeutschDaily is an offline-first daily German practice app focused on useful res
 - Daily sentence queue with progress tracking
 - Spaced repetition scheduling
 - 500-card daily-life vocabulary deck with articles, gender, plurals, examples, and Anki-style ratings
+- 2,525-word German frequency dictionary with example sentences, SRS review, and practice mode
 - A1, A2, and B1 grammar curriculum with a complete topic index, study tracking, focused explanations, examples, and generated exercises
 - Browse by topic
 - Pattern learning and pattern practice
@@ -45,6 +46,8 @@ src/content.js            Topics, patterns, and sentence seed data
 src/learning.js           Learn more generation and teaching metadata
 src/vocab.js              500-card daily-life vocabulary deck
 src/grammar.js            A1/A2/B1 grammar course content
+src/frequency-dictionary-data.js  2,525-word frequency dictionary data
+src/frequency-dictionary.json     Parsed frequency dictionary (JSON, generated)
 src/storage.js            Local storage, daily queue, history, and SRS
 src/app.js                Rendering, navigation, practice, TTS, import/export
 src/assets/logo.svg       Minimal app logo and favicon
@@ -52,6 +55,8 @@ src/styles.css            CSS import index
 src/styles/               Split CSS files by app area
 scripts/validate.js       Static validation for content and app wiring
 scripts/logic-tests.js    Storage, import, and SRS regression tests
+scripts/parse_frequency_pdf.py  PDF parser for frequency dictionary
+docs/german-frequency-dictionary.md  Frequency dictionary summary (generated)
 ```
 
 ## Progress Storage
@@ -90,11 +95,23 @@ The validation checks:
 - every sentence has learning metadata
 - vocabulary cards have valid topics, source refs, noun gender/article data, and examples
 - grammar modules cover A1, A2, and B1 with complete lesson metadata
+- frequency dictionary has 2,525 unique, sequential entries with all required fields
 - expected replies and practice prompts are not generic
 - formal/informal coverage stays above the configured threshold
 - misleading sentence-to-pattern links are blocked by contract checks
 - A1 survival and emergency coverage stay above launch thresholds
 - known reviewer fixes remain intact
+
+## Frequency Dictionary
+
+The frequency dictionary module uses 2,525 manually parsed entries from the *German Frequency Dictionary 1* PDF. To regenerate the data after updating the PDF:
+
+```bash
+pip install pdfplumber
+python3 scripts/parse_frequency_pdf.py
+```
+
+This writes `src/frequency-dictionary.json`, `src/frequency-dictionary-data.js`, and `docs/german-frequency-dictionary.md`.
 
 ## Content Guidelines
 

@@ -11,6 +11,7 @@ const source = [
   read('src/learning.js'),
   read('src/vocab.js'),
   read('src/grammar.js'),
+  read('src/frequency-dictionary-data.js'),
   read('src/storage.js'),
   read('src/app.js'),
   'renderPractice = () => {}; updateHeader = () => {}; render = () => {};',
@@ -53,6 +54,16 @@ const source = [
     renderRevealDetails,
     applyImport,
     getViewState: () => V,
+    // Frequency
+    FREQUENCY_DICTIONARY,
+    scheduleFreq,
+    recordFreqAttempt,
+    ensureFreqDailyQueue,
+    getFreqReviewIds,
+    markFreqLearned,
+    unmarkFreqLearned,
+    toggleFreqLearned,
+    toggleFreqFav,
   };`
 ].join('\n');
 
@@ -437,5 +448,76 @@ const missingSentenceVocabIds = Array.from(t.SENTENCES)
   .map(sentence => sentence.id);
 assert.deepStrictEqual(missingSentenceVocabIds, [], 'every sentence should render useful sentence vocab');
 assert(!revealHtml.includes('Learn' + ' more'), 'revealed details must not contain old reveal-button copy');
+
+// ─── Frequency Dictionary ─────────────────────
+assert(Array.isArray(t.FREQUENCY_DICTIONARY) && t.FREQUENCY_DICTIONARY.length === 2525, 'FREQUENCY_DICTIONARY is loaded with 2525 entries');
+
+// scheduleFreq: new entry with each rating
+reset({});
+let freqAgain = t.scheduleFreq('1', 'again');
+assert.strictEqual(freqAgain.learned, false, 'new freq again should not mark learned');
+assert(!t.DB().freqLearned.has('1'), 'new freq again stays unlearned');
+
+let freqHard = t.scheduleFreq('1', 'hard');
+assert.strictEqual(freqHard.intervalAfter, 1, 'new freq hard schedules one day');
+assert(t.DB().freqLearned.has('1'), 'new freq hard marks learned');
+
+reset({});
+let freqGood = t.scheduleFreq('2', 'good');
+assert.strictEqual(freqGood.intervalAfter, 3, 'new freq good schedules three days');
+assert(t.DB().freqLearned.has('2'), 'new freq good marks learned');
+
+reset({});
+let freqEasy = t.scheduleFreq('3', 'easy');
+assert.strictEqual(freqEasy.intervalAfter, 5, 'new freq easy schedules five days');
+assert(t.DB().freqLearned.has('3'), 'new freq easy marks learned');
+
+// scheduleFreq: review with ratings
+reset({
+  freqLearned: ['10'],
+  freqSrs: { '10': { interval: 10, ease: 2.5, level: 3, nextReview: t.today(), lastReview: t.addDaysISO(-10) } },
+});
+let freqReviewedHard = t.scheduleFreq('10', 'hard');
+assert.strictEqual(freqReviewedHard.intervalAfter, 12, 'review freq hard uses shorter multiplier');
+
+reset({
+  freqLearned: ['10'],
+  freqSrs: { '10': { interval: 10, ease: 2.5, level: 3, nextReview: t.today(), lastReview: t.addDaysISO(-10) } },
+});
+let freqReviewedGood = t.scheduleFreq('10', 'good');
+assert.strictEqual(freqReviewedGood.intervalAfter, 25, 'review freq good uses ease multiplier');
+
+reset({
+  freqLearned: ['10'],
+  freqSrs: { '10': { interval: 10, ease: 2.5, level: 3, nextReview: t.today(), lastReview: t.addDaysISO(-10) } },
+});
+let freqReviewedEasy = t.scheduleFreq('10', 'easy');
+assert.strictEqual(freqReviewedEasy.intervalAfter, 33, 'review freq easy extends good interval');
+
+// ensureFreqDailyQueue populates the queue
+reset({
+  freqLearned: ['1'],
+  freqDailyGoal: 5,
+  freqSrs: { '1': { interval: 3, ease: 2.5, level: 1, nextReview: t.today(), lastReview: t.addDaysISO(-3) } },
+});
+t.ensureFreqDailyQueue();
+assert.strictEqual(t.DB().freqDailyQueue[0], '1', 'due freq reviews should be first in the freq daily queue');
+
+// toggleFreqLearned / toggleFreqFav update DB
+reset({});
+t.markFreqLearned('5', 'manual');
+assert(t.DB().freqLearned.has('5'), 'manual freq learned is tracked');
+assert.strictEqual(t.DB().freqAttempts[0].result, 'manual', 'manual freq learned records attempt');
+
+reset({ freqLearned: ['5'], freqSrs: { '5': { interval: 3, ease: 2.5, level: 1, nextReview: t.addDaysISO(3), lastReview: t.today() } } });
+t.unmarkFreqLearned('5');
+assert(!t.DB().freqLearned.has('5'), 'unmark freq learned removes from set');
+assert(!t.DB().freqSrs['5'], 'unmark freq learned removes SRS data');
+
+reset({});
+t.toggleFreqFav('7');
+assert(t.DB().freqFavorites.has('7'), 'toggle freq fav adds to favorites');
+t.toggleFreqFav('7');
+assert(!t.DB().freqFavorites.has('7'), 'toggle freq fav removes from favorites');
 
 console.log('logic-tests passed');

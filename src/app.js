@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════
-let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: 'a1', grammarLessonId: null, historyDay: null };
+let V = { view: 'today', topicId: null, filter: 'all', query: '', speaking: null, libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: 'a1', grammarLessonId: null, historyDay: null, freqFilter: 'all', freqRange: 'all', freqRevealed: {} };
 
 // ══════════════════════════════════════════════
 // PATTERN DETECTION FOR SENTENCES
@@ -11,9 +11,11 @@ function findMatchingPattern(sentence) {
   if (explicit) return explicit;
   return null;
 }
-const VALID_VIEWS = new Set(['today', 'browse', 'vocab', 'grammar', 'patterns', 'saved', 'history', 'history-day', 'stats']);
+const VALID_VIEWS = new Set(['today', 'browse', 'vocab', 'grammar', 'frequency', 'patterns', 'saved', 'history', 'history-day', 'stats']);
 const VALID_FILTERS = new Set(['all', 'unlearned', 'learned', 'favorites']);
 const VALID_VOCAB_FILTERS = new Set(['all', 'new', 'due', 'learned', 'saved']);
+const VALID_FREQ_FILTERS = new Set(['all', 'new', 'due', 'learned', 'saved']);
+const VALID_FREQ_RANGES = new Set(['all', '1-500', '501-1000', '1001-1500', '1501-2000', '2001-2525']);
 const VALID_PATTERN_FILTERS = new Set(['learning', 'due', 'understood', 'all']);
 const VALID_LIBRARY_TABS = new Set(['saved', 'learned']);
 const TOPIC_IDS = new Set(TOPICS.map(t => t.id));
@@ -53,7 +55,7 @@ function normalizeGrammarLessonId(moduleId, value) {
   return module.lessons[0] ? module.lessons[0].id : null;
 }
 function stateFromUrl(href) {
-  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: DEFAULT_GRAMMAR_MODULE_ID, grammarLessonId: null, historyDay: null };
+  const fallback = { view: 'today', topicId: null, filter: 'all', query: '', libTab: 'saved', patFilter: 'learning', vocabTopicId: null, vocabFilter: 'all', grammarModuleId: DEFAULT_GRAMMAR_MODULE_ID, grammarLessonId: null, historyDay: null, freqFilter: 'all', freqRange: 'all' };
   let params;
   try {
     const base = window.location && window.location.href ? window.location.href : 'http://localhost/';
@@ -67,6 +69,7 @@ function stateFromUrl(href) {
   const module = params.get('module');
   const lesson = params.get('lesson');
   const filter = params.get('filter');
+  const range = params.get('range');
   const tab = params.get('tab');
   const day = normalizeDateKey(params.get('day'));
 
@@ -78,6 +81,10 @@ function stateFromUrl(href) {
     fallback.view = 'vocab';
     fallback.vocabTopicId = topic && VOCAB_TOPIC_IDS.has(topic) ? topic : null;
     fallback.vocabFilter = VALID_VOCAB_FILTERS.has(filter) ? filter : 'all';
+  } else if (view === 'frequency') {
+    fallback.view = 'frequency';
+    fallback.freqFilter = VALID_FREQ_FILTERS.has(filter) ? filter : 'all';
+    fallback.freqRange = VALID_FREQ_RANGES.has(range) ? range : 'all';
   } else if (view === 'grammar') {
     fallback.view = 'grammar';
     fallback.grammarModuleId = normalizeGrammarModuleId(module);
@@ -110,6 +117,9 @@ function urlFromState(state = V) {
   } else if (view === 'vocab') {
     if (state.vocabTopicId && VOCAB_TOPIC_IDS.has(state.vocabTopicId)) params.set('topic', state.vocabTopicId);
     if (state.vocabFilter && state.vocabFilter !== 'all') params.set('filter', state.vocabFilter);
+  } else if (view === 'frequency') {
+    if (state.freqFilter && state.freqFilter !== 'all') params.set('filter', state.freqFilter);
+    if (state.freqRange && state.freqRange !== 'all') params.set('range', state.freqRange);
   } else if (view === 'grammar') {
     const moduleId = normalizeGrammarModuleId(state.grammarModuleId);
     if (moduleId !== DEFAULT_GRAMMAR_MODULE_ID) params.set('module', moduleId);
@@ -137,6 +147,8 @@ function applyUrlState(href) {
   V.patFilter = next.patFilter;
   V.vocabTopicId = next.vocabTopicId;
   V.vocabFilter = next.vocabFilter;
+  V.freqFilter = next.freqFilter;
+  V.freqRange = next.freqRange;
   V.grammarModuleId = next.grammarModuleId;
   V.grammarLessonId = next.grammarLessonId;
   V.historyDay = next.historyDay;
@@ -163,6 +175,8 @@ function nav(view, extra) {
   V.grammarLessonId = nextView === 'grammar' ? normalizeGrammarLessonId(V.grammarModuleId, null) : V.grammarLessonId;
   V.filter = 'all';
   V.vocabFilter = 'all';
+  V.freqFilter = 'all';
+  V.freqRange = 'all';
   V.query = '';
   V.historyDay = null;
   if (nextView === 'patterns') V.patFilter = 'learning';
@@ -201,6 +215,7 @@ function render() {
   else if (V.view === 'browse' && V.topicId) root.innerHTML = renderTopic();
   else if (V.view === 'browse') root.innerHTML = renderBrowse();
   else if (V.view === 'vocab') root.innerHTML = renderVocab();
+  else if (V.view === 'frequency') root.innerHTML = renderFrequency();
   else if (V.view === 'grammar') root.innerHTML = renderGrammar();
   else if (V.view === 'patterns') root.innerHTML = renderPatterns();
   else if (V.view === 'saved') root.innerHTML = renderSaved();
@@ -217,7 +232,7 @@ function updateHeader() {
   document.getElementById('stk-n').textContent = DB.streak;
 }
 function updateNavBtns() {
-  ['today', 'browse', 'vocab', 'grammar', 'patterns', 'stats'].forEach(v => {
+  ['today', 'browse', 'vocab', 'grammar', 'frequency', 'patterns', 'stats'].forEach(v => {
     const el = document.getElementById('nb-' + v);
     if (el) el.className = 'nb' + (V.view === v ? ' on' : '');
     const mel = document.getElementById('mnb-' + v);
@@ -484,6 +499,190 @@ function renderVocabCard(card, i) {
   <button class="act-btn" onclick="startVocabPractice({ids:['${card.id}'],skipSessionFilter:true})">Practice</button>
 </div>
   </div>`;
+}
+
+// ══════════════════════════════════════════════
+// FREQUENCY DICTIONARY
+// ══════════════════════════════════════════════
+function freqDisplay(entry) {
+  return entry ? entry.german : '';
+}
+function freqPosLabel(entry) {
+  if (!entry || !entry.pos) return '';
+  return entry.pos.split(/[;,]/).map(p => p.trim()).filter(Boolean).join(' · ');
+}
+function freqSentenceWithHighlight(entry) {
+  if (!entry || !entry.germanSentence) return '';
+  const word = esc(entry.german).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(^|[^\\p{L}])(${word})(?=[^\\p{L}]|$)`, 'giu');
+  return esc(entry.germanSentence).replace(regex, '$1<strong lang="de">$2</strong>');
+}
+function freqCardsForView() {
+  const due = new Set(getFreqReviewIds());
+  const q = V.query.trim().toLowerCase();
+  const [rangeMin, rangeMax] = V.freqRange === 'all' ? [0, Infinity] : V.freqRange.split('-').map(Number);
+  if (typeof FREQUENCY_DICTIONARY === 'undefined') return [];
+  return FREQUENCY_DICTIONARY.filter(entry => {
+    const id = String(entry.rank);
+    if (V.freqRange !== 'all' && (entry.rank < rangeMin || entry.rank > rangeMax)) return false;
+    if (V.freqFilter === 'new' && DB.freqLearned.has(id)) return false;
+    if (V.freqFilter === 'due' && !due.has(id)) return false;
+    if (V.freqFilter === 'learned' && !DB.freqLearned.has(id)) return false;
+    if (V.freqFilter === 'saved' && !DB.freqFavorites.has(id)) return false;
+    if (!q) return true;
+    return [entry.german, entry.english, entry.pos, entry.germanSentence, entry.englishSentence]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(q));
+  });
+}
+function renderFrequency() {
+  ensureFreqDailyQueue();
+  const dueIds = getFreqReviewIds();
+  const dueEntries = dueIds.map(id => freqById(id)).filter(Boolean);
+  const queueEntries = DB.freqDailyQueue.map(id => freqById(id)).filter(Boolean);
+  const queueDone = queueEntries.filter(e => DB.freqDailyQueueDone.has(String(e.rank)) || (DB.freqSrs[String(e.rank)] && DB.freqSrs[String(e.rank)].lastReview === today())).length;
+  const learned = DB.freqLearned.size;
+  const saved = DB.freqFavorites.size;
+  const total = typeof FREQUENCY_DICTIONARY === 'undefined' ? 0 : FREQUENCY_DICTIONARY.length;
+  const remaining = total - learned;
+  const queuePct = queueEntries.length ? Math.min(100, Math.round(queueDone / queueEntries.length * 100)) : 0;
+  const visibleEntries = freqCardsForView();
+  const visibleIds = visibleEntries.map(e => String(e.rank));
+  const queueIds = queueEntries.map(e => String(e.rank));
+  const dueIdsJson = idsArg(dueIds);
+  const queueIdsJson = idsArg(queueIds);
+  const visibleIdsJson = idsArg(visibleIds);
+  const rangeChips = [['all', 'All'], ['1-500', '1–500'], ['501-1000', '501–1000'], ['1001-1500', '1001–1500'], ['1501-2000', '1501–2000'], ['2001-2525', '2001–2525']]
+    .map(([r, label]) => `<button class="filter-chip${V.freqRange === r ? ' on' : ''}" onclick="setFreqRange('${r}')" aria-pressed="${V.freqRange === r}" type="button">${esc(label)}</button>`).join('');
+  const dueSection = dueEntries.length ? `<div class="review-section vocab-review-section">
+  <div class="review-section-hdr">
+    <div class="review-section-title">🔁 Due Frequency Review <span class="review-count-badge">${dueEntries.length}</span></div>
+    <button class="review-practice-btn" onclick="startFrequencyPractice({ids:${dueIdsJson},isSRS:true})">Practice Now</button>
+  </div>
+  <div class="review-section-sub">These frequency cards are scheduled for spaced review today.</div>
+</div>` : '';
+  const goalOptions = [5, 10, 15, 20, 25, 30].map(n => `<button class="vocab-goal-opt${DB.freqDailyGoal === n ? ' on' : ''}" onclick="setFreqGoal(${n})" aria-pressed="${DB.freqDailyGoal === n}" type="button">${n}</button>`).join('');
+  const cardsTitle = V.query
+    ? `Search Results (${visibleEntries.length})`
+    : V.freqRange === 'all'
+    ? `All Frequency Cards (${visibleEntries.length})`
+    : `Rank ${esc(V.freqRange)} (${visibleEntries.length})`;
+
+  return `<div style="padding-top:14px">
+<h2 class="page-title">Frequency Dictionary</h2>
+<p class="page-sub">2,525 most common German words from the parsed frequency dictionary, with example sentences and SRS review.</p>
+${dueSection}
+
+<div class="goal-card vocab-goal-card">
+  <div class="goal-top">
+    <div><div class="goal-title">🔤 Today's Frequency Queue</div><div class="goal-date">${queueEntries.length} card${queueEntries.length !== 1 ? 's' : ''} ready</div></div>
+    <button class="goal-btn" onclick="refreshFreqQueue()" type="button">New batch</button>
+  </div>
+  <div class="goal-nums">
+    <div><div class="gnum-v" style="color:var(--green)">${queueDone}</div><div class="gnum-l">Queue done</div></div>
+    <div><div class="gnum-v" style="color:var(--amber)">${dueIds.length}</div><div class="gnum-l">Due</div></div>
+    <div><div class="gnum-v" style="color:var(--accent)">${learned}</div><div class="gnum-l">Learned</div></div>
+    <div><div class="gnum-v" style="color:var(--pink)">${saved}</div><div class="gnum-l">Saved</div></div>
+    <div><div class="gnum-v" style="color:var(--text-3)">${remaining}</div><div class="gnum-l">Remaining</div></div>
+  </div>
+  <div class="goal-bar-bg"><div class="goal-bar-fill" style="width:${queuePct}%"></div></div>
+  <div class="vocab-goal-row">
+    <span>Daily frequency goal</span>
+    <div class="vocab-goal-options">${goalOptions}</div>
+  </div>
+</div>
+
+<div class="vocab-action-row">
+  ${queueEntries.length ? `<button class="learned-practice-btn" onclick="startFrequencyPractice({ids:${queueIdsJson}})">🎯 Practice Today's ${queueEntries.length}</button>` : ''}
+  ${dueEntries.length ? `<button class="review-practice-btn" onclick="startFrequencyPractice({ids:${dueIdsJson},isSRS:true})">🔁 Practice Due ${dueEntries.length}</button>` : ''}
+  ${visibleEntries.length ? `<button class="act-btn vocab-visible-practice" onclick="startFrequencyPractice({ids:${visibleIdsJson},skipSessionFilter:true})">Practice Visible</button>` : ''}
+</div>
+
+${queueEntries.length ? `<div class="sec-lbl">Today's New / Due Queue</div>${queueEntries.map((e, i) => renderFreqCard(e, i)).join('')}` : ''}
+
+<div class="search-wrap" style="margin:16px 0"><span class="search-icon">🔍</span><input class="search-input" placeholder="Search German word, English meaning, or sentence..." value="${esc(V.query)}" oninput="setQuery(this.value)" type="text"></div>
+<div class="filter-row vocab-topic-row">${rangeChips}</div>
+<div class="filter-row">
+  ${['all', 'new', 'due', 'learned', 'saved'].map(f => `<button class="filter-chip${V.freqFilter === f ? ' on' : ''}" onclick="setFreqFilter('${f}')" aria-pressed="${V.freqFilter === f}" type="button">${f === 'all' ? 'All' : f === 'new' ? 'New' : f === 'due' ? 'Due' : f === 'learned' ? '✓ Learned' : '⭐ Saved'}</button>`).join('')}
+</div>
+<div class="sec-lbl">${cardsTitle}</div>
+${visibleEntries.length ? visibleEntries.map((e, i) => renderFreqCard(e, i)).join('') : `<div class="empty-state"><div class="empty-icon">🔍</div>No frequency cards match.</div>`}
+  </div>`;
+}
+function renderFreqCard(entry, i) {
+  const id = String(entry.rank);
+  const learned = DB.freqLearned.has(id);
+  const saved = DB.freqFavorites.has(id);
+  const nextLabel = freqSrsNextLabel(id);
+  const srsLvl = getFreqSrsLevel(id);
+  const srsDots = learned ? `<span class="srs-dots" title="${esc(nextLabel)}">${SRS_INTERVALS.map((_, dot) => `<span class="srs-dot${dot < srsLvl ? ' filled' : ''}"></span>`).join('')}</span>${nextLabel ? `<span class="srs-next">${esc(nextLabel)}</span>` : ''}` : '';
+  return `<div class="vc freq-card${learned ? ' lrn' : ''}${saved ? ' fav' : ''}" id="fc-${id}">
+<div class="sc-top">
+  <span class="topic-label">#${entry.rank}</span>
+  <span class="lvl-tag">${esc(freqPosLabel(entry))}</span>
+  ${learned ? `<span class="lrn-badge">✓ Learned</span>${srsDots}` : ''}
+</div>
+<button class="vocab-term reveal-btn" onclick="toggleFreqReveal('${id}')" aria-expanded="false" type="button" lang="de">${esc(freqDisplay(entry))}</button>
+<div class="freq-sentence" lang="de">${freqSentenceWithHighlight(entry)}</div>
+<div class="reveal-hint" id="fhn-${id}">👆 Tap to reveal English translation</div>
+<button class="vocab-en hid reveal-btn" id="fen-${id}" onclick="toggleFreqReveal('${id}')" aria-hidden="true" hidden type="button">
+  <span class="freq-en-word">${esc(entry.english)}</span>
+  <span class="freq-en-sentence">${esc(entry.englishSentence)}</span>
+</button>
+<div class="freq-ipa hid" id="fipa-${id}" hidden>${entry.ipa ? esc(entry.ipa) : ''}</div>
+<div class="card-actions">
+  <button class="act-btn speak-btn" data-id="freq-${id}" onclick="speak(${jsArg(entry.germanSentence || entry.german)},'freq-${id}')" type="button">
+    ${ICO.speak} Listen
+  </button>
+  <button class="act-btn${learned ? ' is-learned' : ''}" id="flrn-btn-${id}" onclick="toggleFreqLearned('${id}')">
+    ${ICO.check} ${learned ? 'Learned' : 'Mark learned'}
+  </button>
+  <button class="act-btn${saved ? ' is-fav' : ''}" id="ffav-btn-${id}" onclick="toggleFreqFav('${id}')">
+    ${ICO.star} ${saved ? 'Saved' : 'Save'}
+  </button>
+  <button class="act-btn" onclick="startFrequencyPractice({ids:['${id}'],skipSessionFilter:true})">Practice</button>
+</div>
+  </div>`;
+}
+function toggleFreqReveal(id) {
+  const en = document.getElementById('fen-' + id);
+  const hn = document.getElementById('fhn-' + id);
+  const ipa = document.getElementById('fipa-' + id);
+  const card = document.getElementById('fc-' + id);
+  if (!en) return;
+  if (en.classList.contains('hid')) {
+    en.hidden = false;
+    en.setAttribute('aria-hidden', 'false');
+    en.classList.remove('hid');
+    if (hn) hn.style.display = 'none';
+    if (ipa) { ipa.hidden = false; ipa.classList.remove('hid'); }
+    if (card) card.querySelectorAll('.reveal-btn').forEach(btn => btn.setAttribute('aria-expanded', 'true'));
+  } else {
+    en.classList.add('hid');
+    en.hidden = true;
+    en.setAttribute('aria-hidden', 'true');
+    if (hn) hn.style.display = 'block';
+    if (ipa) { ipa.hidden = true; ipa.classList.add('hid'); }
+    if (card) card.querySelectorAll('.reveal-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+  }
+}
+function setFreqFilter(filter) {
+  V.freqFilter = VALID_FREQ_FILTERS.has(filter) ? filter : 'all';
+  commitState();
+}
+function setFreqRange(range) {
+  V.freqRange = VALID_FREQ_RANGES.has(range) ? range : 'all';
+  commitState();
+}
+function setFreqGoal(n) {
+  DB.freqDailyGoal = clampNumber(n, 1, 50, DEFAULT_FREQ_DAILY_GOAL);
+  save();
+  render();
+}
+function refreshFreqQueue() {
+  DB.freqDailyQueue = [];
+  ensureFreqDailyQueue();
+  render();
 }
 
 // ─── GRAMMAR ─────────────────────────────────
@@ -1828,6 +2027,7 @@ function setGoal(n) {
 let P = { active: false, queue: [], idx: 0, revealed: false, got: 0, again: 0, skipped: 0, isSRS: false, dir: 'de2en', dirChoice: true, answered: {}, missedIds: [], typedFeedback: null };
 let PP = { active: false, queue: [], idx: 0, revealed: false, got: 0, again: 0, skipped: 0, answered: {} };
 let VP = { active: false, queue: [], idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS: false, dir: 'de2en', dirChoice: true, answered: {}, missedIds: [] };
+let FP = { active: false, queue: [], idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS: false, answered: {}, missedIds: [] };
 
 function startPractice(opts) {
   const ids = Array.isArray(opts) ? opts : opts.ids;
@@ -2236,7 +2436,7 @@ function practicePrev() {
   if (P.idx > 0) { P.idx--; P.revealed = false; P.typedFeedback = null; renderPractice(); }
 }
 
-function closePractice() { P.active = false; PP.active = false; VP.active = false; const ov = document.getElementById('practice-overlay'); if (ov) ov.remove(); render(); }
+function closePractice() { P.active = false; PP.active = false; VP.active = false; FP.active = false; const ov = document.getElementById('practice-overlay'); if (ov) ov.remove(); render(); }
 
 // ==============================
 // VOCAB PRACTICE MODE
@@ -2457,6 +2657,164 @@ function vocabPracticeNext() {
 }
 
 // ==============================
+// FREQUENCY PRACTICE MODE
+// ==============================
+function startFrequencyPractice(opts) {
+  const ids = Array.isArray(opts) ? opts : opts.ids;
+  const isSRS = Array.isArray(opts) ? false : Boolean(opts.isSRS);
+  const entries = ids.map(id => freqById(id)).filter(Boolean);
+  if (!entries.length) return;
+  P.active = false;
+  PP.active = false;
+  VP.active = false;
+  FP = { active: true, queue: shuffle([...entries]), idx: 0, revealed: false, again: 0, hard: 0, good: 0, easy: 0, skipped: 0, isSRS, answered: {}, missedIds: [] };
+  renderFrequencyPractice();
+}
+function renderFrequencyPractice() {
+  const existing = document.getElementById('practice-overlay');
+  if (existing) existing.remove();
+  if (!FP.active) return;
+
+  const ov = document.createElement('div');
+  ov.id = 'practice-overlay';
+  ov.className = 'practice-overlay';
+
+  if (FP.idx >= FP.queue.length) {
+    const total = FP.queue.length;
+    const answeredCount = Object.keys(FP.answered).filter(key => FP.answered[key] !== 'skip').length;
+    const strong = FP.good + FP.easy;
+    const pct = answeredCount ? Math.round(strong / answeredCount * 100) : 0;
+    const retryIds = idsArg(FP.queue.map(e => String(e.rank)));
+    const missedIds = [...new Set(FP.missedIds)];
+    const missedBtn = missedIds.length ? `<button class="prac-sum-retry" onclick="startFrequencyPractice({ids:${idsArg(missedIds)},skipSessionFilter:true})">Review Again</button>` : '';
+    ov.innerHTML = `
+  <div class="practice-hdr"><span style="font-size:16px;font-weight:700;color:var(--text)">Frequency Practice Complete</span></div>
+  <div class="practice-body">
+    <div class="prac-summary">
+      <div class="prac-sum-icon">🔤</div>
+      <div class="prac-sum-title">${pct >= 80 ? 'Strong recall' : pct >= 50 ? 'Good progress' : 'Keep reviewing'}</div>
+      <div class="prac-sum-sub">You reviewed ${total} frequency card${total !== 1 ? 's' : ''}</div>
+      <div class="prac-sum-stats vocab-sum-stats">
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--red)">${FP.again}</div><div class="prac-sum-l">Again</div></div>
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--amber)">${FP.hard}</div><div class="prac-sum-l">Hard</div></div>
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--green)">${FP.good}</div><div class="prac-sum-l">Good</div></div>
+        <div class="prac-sum-stat"><div class="prac-sum-n" style="color:var(--blue)">${FP.easy}</div><div class="prac-sum-l">Easy</div></div>
+      </div>
+      <div class="prac-sum-actions">
+        ${missedBtn}
+        <button class="prac-sum-retry" onclick="startFrequencyPractice({ids:${retryIds},isSRS:${FP.isSRS})">Practice Again</button>
+        <button class="prac-sum-done" onclick="closePractice()">Done</button>
+      </div>
+    </div>
+  </div>`;
+    document.body.appendChild(ov);
+    return;
+  }
+
+  const entry = FP.queue[FP.idx];
+  const id = String(entry.rank);
+  const total = FP.queue.length;
+  const pct = Math.round(FP.idx / total * 100);
+  const ratingHelp = DB.freqLearned.has(id)
+    ? 'Again = 1 day · Hard = shorter interval · Good = normal interval · Easy = longer interval'
+    : 'Again requeues · Hard = 1 day · Good = 3 days · Easy = 5 days';
+  ov.innerHTML = `
+  <div class="practice-hdr">
+    <button class="practice-exit" onclick="closePractice()">Exit</button>
+      <div class="practice-prog-wrap">
+      <div class="practice-prog-bar"><div class="practice-prog-fill" style="width:${pct}%"></div></div>
+      <div class="practice-prog-lbl">${FP.idx + 1}/${total} · Again ${FP.again} · Hard ${FP.hard} · Good ${FP.good} · Easy ${FP.easy}</div>
+    </div>
+  </div>
+  <div class="practice-body">
+    <div class="practice-card freq-practice-card">
+      <div class="practice-topic-lbl">#${entry.rank} · ${esc(freqPosLabel(entry))}</div>
+      <div class="practice-de freq-practice-word" lang="de">${esc(entry.german)}</div>
+      ${FP.revealed ? `
+        <div class="freq-practice-sentence" lang="de">${freqSentenceWithHighlight(entry)}</div>
+        <div class="practice-en freq-practice-en">${esc(entry.english)}</div>
+        <div class="vocab-practice-example"><strong>Example</strong><span lang="de">${esc(entry.germanSentence)}</span><em>${esc(entry.englishSentence)}</em></div>
+        ${entry.ipa ? `<div class="practice-use"><strong>IPA:</strong> ${esc(entry.ipa)}</div>` : ''}
+      ` : `<button class="practice-reveal-hint" onclick="frequencyPracticeReveal()" type="button">Tap to reveal the example sentence and meaning</button>`}
+    </div>
+    <div style="display:flex;justify-content:center;margin:10px 0">
+      <button class="act-btn speak-btn" data-id="fprac-${id}" onclick="speak(${jsArg(entry.germanSentence || entry.german)},'fprac-${id}')" style="font-size:13px;padding:8px 18px" type="button">
+        ${ICO.speak} Listen
+      </button>
+    </div>
+    ${FP.revealed ? `
+      <div class="vocab-rating-help">${esc(ratingHelp)}</div>
+      <div class="vocab-rating-btns">
+        <button class="vocab-rate again" onclick="frequencyPracticeAnswer('again')">Again</button>
+        <button class="vocab-rate hard" onclick="frequencyPracticeAnswer('hard')">Hard</button>
+        <button class="vocab-rate good" onclick="frequencyPracticeAnswer('good')">Good</button>
+        <button class="vocab-rate easy" onclick="frequencyPracticeAnswer('easy')">Easy</button>
+      </div>` : ''}
+    <div class="kbd-hint" style="margin-top:10px">
+      <span class="kbd">Space</span> reveal &nbsp;
+      <span class="kbd">→</span> skip
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  if (!FP.revealed) {
+    if (isMobile) speak(entry.germanSentence || entry.german, `fprac-${id}`);
+    else setTimeout(() => speak(entry.germanSentence || entry.german, `fprac-${id}`), 150);
+  }
+}
+function frequencyPracticeReveal() {
+  FP.revealed = !FP.revealed;
+  renderFrequencyPractice();
+}
+function frequencyPracticeAnswer(rating) {
+  const current = FP.queue[FP.idx];
+  if (!current) return;
+  const attemptKey = String(FP.idx);
+  if (FP.answered[attemptKey]) {
+    FP.idx++;
+    FP.revealed = false;
+    renderFrequencyPractice();
+    return;
+  }
+  const id = String(current.rank);
+  const intervalBefore = DB.freqSrs[id] ? DB.freqSrs[id].interval || 0 : 0;
+  const scheduled = scheduleFreq(id, rating);
+  const intervalAfter = scheduled.intervalAfter;
+  FP.answered[attemptKey] = rating;
+  if (rating === 'again') FP.again++;
+  else if (rating === 'hard') FP.hard++;
+  else if (rating === 'easy') FP.easy++;
+  else FP.good++;
+
+  if (rating === 'again') {
+    FP.missedIds.push(id);
+    if (!scheduled.learned && !FP.queue.slice(FP.idx + 1).some(e => String(e.rank) === id)) {
+      const insertAt = Math.min(FP.queue.length, FP.idx + 3);
+      FP.queue.splice(insertAt, 0, current);
+    }
+  }
+  recordFreqAttempt({ id, result: rating, intervalBefore, intervalAfter, wasDue: scheduled.wasDue });
+  save();
+  FP.idx++;
+  FP.revealed = false;
+  renderFrequencyPractice();
+}
+function frequencyPracticeNext() {
+  if (FP.idx < FP.queue.length) {
+    const current = FP.queue[FP.idx];
+    const attemptKey = String(FP.idx);
+    if (current && !FP.answered[attemptKey]) {
+      FP.answered[attemptKey] = 'skip';
+      FP.skipped++;
+      recordFreqAttempt({ id: String(current.rank), result: 'again', intervalBefore: 0, intervalAfter: 0, wasDue: false });
+      save();
+    }
+    FP.idx++;
+    FP.revealed = false;
+    renderFrequencyPractice();
+  }
+}
+
+// ==============================
 // PATTERN PRACTICE MODE
 // ==============================
 function startPatternPractice(opts) {
@@ -2625,6 +2983,19 @@ document.addEventListener('keydown', e => {
     if (VP.revealed && ['1', '2', '3', '4'].includes(e.key)) {
       e.preventDefault();
       vocabPracticeAnswer({ 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' }[e.key]);
+      return;
+    }
+    return;
+  }
+  // Frequency practice keyboard shortcuts
+  if (FP.active) {
+    if (e.key === 'Escape') { closePractice(); return; }
+    if (FP.idx >= FP.queue.length) return;
+    if (!isTyping && e.code === 'Space') { e.preventDefault(); frequencyPracticeReveal(); return; }
+    if (e.code === 'ArrowRight') { e.preventDefault(); frequencyPracticeNext(); return; }
+    if (FP.revealed && ['1', '2', '3', '4'].includes(e.key)) {
+      e.preventDefault();
+      frequencyPracticeAnswer({ 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' }[e.key]);
       return;
     }
     return;
