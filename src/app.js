@@ -522,7 +522,7 @@ function freqCardsForView() {
   const q = V.query.trim().toLowerCase();
   const [rangeMin, rangeMax] = V.freqRange === 'all' ? [0, Infinity] : V.freqRange.split('-').map(Number);
   if (typeof FREQUENCY_DICTIONARY === 'undefined') return [];
-  return FREQUENCY_DICTIONARY.filter(entry => {
+  const filtered = FREQUENCY_DICTIONARY.filter(entry => {
     const id = String(entry.rank);
     if (V.freqRange !== 'all' && (entry.rank < rangeMin || entry.rank > rangeMax)) return false;
     if (V.freqFilter === 'new' && DB.freqLearned.has(id)) return false;
@@ -534,12 +534,15 @@ function freqCardsForView() {
       .filter(Boolean)
       .some(value => String(value).toLowerCase().includes(q));
   });
+  return filtered.sort((a, b) => a.rank - b.rank);
 }
 function renderFrequency() {
+  if (!V.freqRange || !VALID_FREQ_RANGES.has(V.freqRange)) V.freqRange = 'all';
+  if (!V.freqFilter || !VALID_FREQ_FILTERS.has(V.freqFilter)) V.freqFilter = 'all';
   ensureFreqDailyQueue();
-  const dueIds = getFreqReviewIds();
-  const dueEntries = dueIds.map(id => freqById(id)).filter(Boolean);
-  const queueEntries = DB.freqDailyQueue.map(id => freqById(id)).filter(Boolean);
+  const dueIds = getFreqReviewIds().sort((a, b) => Number(a) - Number(b));
+  const dueEntries = dueIds.map(id => freqById(id)).filter(Boolean).sort((a, b) => a.rank - b.rank);
+  const queueEntries = DB.freqDailyQueue.map(id => freqById(id)).filter(Boolean).sort((a, b) => a.rank - b.rank);
   const queueDone = queueEntries.filter(e => DB.freqDailyQueueDone.has(String(e.rank)) || (DB.freqSrs[String(e.rank)] && DB.freqSrs[String(e.rank)].lastReview === today())).length;
   const learned = DB.freqLearned.size;
   const saved = DB.freqFavorites.size;
